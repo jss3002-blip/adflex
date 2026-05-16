@@ -158,9 +158,11 @@ type StockAnalysisViewResult = {
   };
   conflictAnalysis?: ConflictAnalysisViewResult;
   falseSignalAnalysis?: FalseSignalAnalysisViewResult;
+  riskGateOverlay?: RiskGateOverlayViewResult;
 };
 
 type QualitySignalLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+type RiskGateSeverity = "NONE" | "WATCH" | "CAUTION" | "HIGH_RISK" | "BLOCK";
 
 type QualitySignalInsight = {
   severity?: QualitySignalLevel;
@@ -183,6 +185,24 @@ type FalseSignalAnalysisViewResult = {
   riskLevel: QualitySignalLevel;
   signals: QualitySignalInsight[];
   summaryKo: string;
+};
+
+type RiskGateInsightViewResult = {
+  severity: RiskGateSeverity;
+  titleKo: string;
+  summaryKo: string;
+  evidenceKo: string;
+  actionKo: string;
+  scoreImpactNoteKo: string;
+};
+
+type RiskGateOverlayViewResult = {
+  overlayScore: number;
+  severity: RiskGateSeverity;
+  gates: RiskGateInsightViewResult[];
+  summaryKo: string;
+  interpretationKo: string;
+  recommendedActionBiasKo: string;
 };
 
 type YahooProviderDiagnostics = {
@@ -1099,7 +1119,7 @@ function CustomerTakeawaySection({ result }: { result: StockAnalysisViewResult }
 }
 
 function QualitySignalsSection({ result }: { result: StockAnalysisViewResult }) {
-  if (!result.conflictAnalysis && !result.falseSignalAnalysis) return null;
+  if (!result.conflictAnalysis && !result.falseSignalAnalysis && !result.riskGateOverlay) return null;
 
   return (
     <div className="mt-4 rounded-2xl border border-orange-300/15 bg-orange-300/[0.04] p-4">
@@ -1107,11 +1127,11 @@ function QualitySignalsSection({ result }: { result: StockAnalysisViewResult }) 
         <p className="text-sm font-semibold text-orange-100">분석 품질 보강 신호</p>
         <p className="mt-1 text-xs leading-5 text-white/50">
           이 점수는 종목 전체 위험도가 아니라, 개별 점수만으로는 놓치기 쉬운 신호 충돌과 가짜 강세 가능성을
-          따로 평가한 보조 분석 점수입니다. 종합 리스크 점수와 직접 비교하기보다, 단기 확인 우선순위를 정하는
-          참고 지표로 해석해야 합니다.
+          따로 평가한 보조 분석 점수입니다. 리스크 게이트 해석은 원점수가 괜찮아 보여도 핵심 구조 위험 때문에
+          더 신중한 해석이 필요한지 점검하는 진단 계층입니다.
         </p>
       </div>
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-3">
         <QualitySignalPanel
           title="신호 충돌 분석"
           score={result.conflictAnalysis?.conflictScore}
@@ -1128,7 +1148,77 @@ function QualitySignalsSection({ result }: { result: StockAnalysisViewResult }) 
           items={result.falseSignalAnalysis?.signals}
           emptyMessage="현재 뚜렷한 가짜 강세 위험은 제한적입니다."
         />
+        <RiskGateOverlayPanel overlay={result.riskGateOverlay} />
       </div>
+    </div>
+  );
+}
+
+function RiskGateOverlayPanel({ overlay }: { overlay: RiskGateOverlayViewResult | undefined }) {
+  if (!overlay) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+        <p className="text-sm font-semibold text-white/86">리스크 게이트 해석</p>
+        <p className="mt-3 text-xs leading-6 text-white/50">현재 활성화된 리스크 게이트 정보는 없습니다.</p>
+      </div>
+    );
+  }
+
+  const safeScore = clampUiScore(overlay.overlayScore);
+  const colorClass = getRiskGateOverlayColor(safeScore, overlay.severity);
+  const activeGates = (overlay.gates || []).slice(0, 3);
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-white/86">리스크 게이트 해석</p>
+          <p className="mt-2 text-2xl font-semibold text-white">{formatScore(safeScore)}점 / 100점</p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${colorClass.badge}`}>
+          {getRiskGateSeverityLabel(overlay.severity)}
+        </span>
+      </div>
+      <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/10">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${colorClass.bar}`}
+          style={{ width: `${safeScore}%` }}
+        />
+      </div>
+      <p className="mt-3 text-xs leading-6 text-white/58">{overlay.summaryKo}</p>
+      <p className="mt-2 text-[11px] leading-5 text-white/48">{overlay.interpretationKo}</p>
+      <p className="mt-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-5 text-orange-100/72">
+        {overlay.recommendedActionBiasKo}
+      </p>
+      <p className="mt-2 text-[11px] leading-5 text-white/42">
+        이 항목은 현재 finalScore를 변경하지 않습니다. 원점수 해석을 더 신중하게 볼 필요가 있는지 확인하는 구조
+        해석 계층입니다.
+      </p>
+      {activeGates.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {activeGates.map((gate) => (
+            <div key={gate.titleKo} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-white/82">{gate.titleKo}</p>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getRiskGateOverlayColor(0, gate.severity).badge}`}>
+                  {getRiskGateSeverityLabel(gate.severity)}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-white/58">{gate.summaryKo}</p>
+              <p className="mt-2 text-[11px] leading-5 text-white/45">{gate.evidenceKo}</p>
+              <p className="mt-2 text-[11px] leading-5 text-orange-100/70">{gate.actionKo}</p>
+              <p className="mt-2 text-[11px] leading-5 text-white/42">{gate.scoreImpactNoteKo}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-xs font-semibold text-white/72">현재 활성화된 리스크 게이트는 없습니다.</p>
+          <p className="mt-2 text-xs leading-6 text-white/50">
+            현재 원점수 해석을 제한할 만한 핵심 게이트는 감지되지 않았습니다.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1476,46 +1566,6 @@ function InfoPill({ label, value, rawValue }: { label: string; value: string; ra
   );
 }
 
-function EvidenceList({
-  title,
-  items,
-  tone,
-  emptyMessage,
-}: {
-  title: string;
-  items: string[];
-  tone: "cyan" | "violet" | "rose";
-  emptyMessage: string;
-}) {
-  const toneClass =
-    tone === "cyan" ? "text-cyan-100 border-cyan-300/15 bg-cyan-300/[0.05]" : tone === "violet" ? "text-violet-100 border-violet-300/15 bg-violet-300/[0.05]" : "text-rose-100 border-rose-300/15 bg-rose-300/[0.05]";
-
-  return (
-    <div className={`rounded-2xl border p-4 ${toneClass}`}>
-      <p className="text-sm font-semibold">{title}</p>
-      {items.length > 0 ? (
-        <ul className="mt-3 space-y-2 text-xs leading-6 text-white/62">
-          {items.slice(0, 3).map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-3 text-xs leading-6 text-white/45">{emptyMessage}</p>
-      )}
-    </div>
-  );
-}
-
-function getDisplayItems(items: string[] | undefined, limit = 5): string[] {
-  if (!items) return [];
-  return uniqueDetailedIndicatorMessages(items).slice(0, limit);
-}
-
-function uniqueDetailedIndicatorMessages(items: string[] | undefined): string[] {
-  if (!items) return [];
-  return Array.from(new Set(items.filter(Boolean).map((item) => getIndicatorDetailMessage(item))));
-}
-
 function clampUiScore(score: number): number {
   if (!Number.isFinite(score)) return 0;
   return Math.min(Math.max(score, 0), 100);
@@ -1575,6 +1625,23 @@ function getQualitySignalLevelLabel(level: QualitySignalLevel | undefined): stri
   if (level === "MEDIUM") return "보조 위험 신호 보통";
   if (level === "LOW") return "보조 위험 신호 낮음";
   return "보조 분석 확인";
+}
+
+function getRiskGateSeverityLabel(severity: RiskGateSeverity | undefined): string {
+  if (severity === "NONE") return "게이트 없음";
+  if (severity === "WATCH") return "관찰";
+  if (severity === "CAUTION") return "주의";
+  if (severity === "HIGH_RISK") return "고위험";
+  if (severity === "BLOCK") return "분석 제한";
+  return "게이트 확인";
+}
+
+function getRiskGateOverlayColor(score: number, severity: RiskGateSeverity | undefined) {
+  if (severity === "BLOCK") return { bar: "bg-red-800", badge: "bg-red-500/20 text-red-100" };
+  if (severity === "HIGH_RISK" || score >= 80) return { bar: "bg-red-700", badge: "bg-red-500/20 text-red-100" };
+  if (severity === "CAUTION" || score >= 55) return { bar: "bg-orange-500", badge: "bg-orange-300/15 text-orange-100" };
+  if (severity === "WATCH" || score >= 30) return { bar: "bg-yellow-300", badge: "bg-yellow-300/15 text-yellow-100" };
+  return { bar: "bg-slate-400", badge: "bg-slate-300/15 text-slate-100" };
 }
 
 function getActionPriorityDescription(score: number): string {
