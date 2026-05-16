@@ -14,6 +14,8 @@ type YahooChartResult = {
     regularMarketPrice?: number;
     previousClose?: number;
     currency?: string;
+    exchangeName?: string;
+    instrumentType?: string;
   };
   timestamp?: number[];
   indicators?: {
@@ -40,6 +42,24 @@ type ValidYahooCandle = {
   volume: number;
   value: number;
   vwap: number;
+};
+
+export type YahooProviderDiagnostics = {
+  yahooSymbol: string;
+  rawCurrency?: string;
+  rawExchangeName?: string;
+  rawInstrumentType?: string;
+  rawRegularMarketPrice?: number;
+  rawPreviousClose?: number;
+  latestRawOpen?: number;
+  latestRawHigh?: number;
+  latestRawLow?: number;
+  latestRawClose?: number;
+  latestRawVolume?: number;
+  validCandleCount: number;
+  firstCandleDate?: string;
+  latestCandleDate?: string;
+  note: string;
 };
 
 export async function fetchYahooFinanceStockInput(params: {
@@ -91,6 +111,24 @@ export async function fetchYahooFinanceStockInput(params: {
   const week52Low = Math.min(...candles.map((candle) => candle.low));
   const previousClose = finiteOr(result.meta?.previousClose, previous.close);
   const currentPrice = finiteOr(result.meta?.regularMarketPrice, latest.close);
+  const diagnostics = buildProviderDiagnostics({
+    stock: params.stock,
+    result,
+    latest,
+    candles,
+    previousCloseInferred: !isFiniteNumber(result.meta?.previousClose),
+  });
+  const metadata = {
+    currency: result.meta?.currency || "KRW",
+    sector: "미분류",
+    industry: "미분류",
+    isRealtime: false,
+    isConfirmedEOD: true,
+    dataSource: "yahoo-finance",
+    providerDiagnostics: diagnostics,
+  } as StockAnalysisInput["metadata"] & {
+    providerDiagnostics: YahooProviderDiagnostics;
+  };
 
   return {
     ticker: params.stock.code,
@@ -117,14 +155,7 @@ export async function fetchYahooFinanceStockInput(params: {
       source: "confirmed",
       candles,
     },
-    metadata: {
-      currency: result.meta?.currency || "KRW",
-      sector: "미분류",
-      industry: "미분류",
-      isRealtime: false,
-      isConfirmedEOD: true,
-      dataSource: "yahoo-finance",
-    },
+    metadata,
   };
 }
 
@@ -137,8 +168,10 @@ function buildValidCandles(timestamps: number[], quote: YahooQuote): ValidYahooC
     const low = quote.low?.[index];
     const close = quote.close?.[index];
     const volume = quote.volume?.[index];
+    const timestamp = timestamps[index];
 
     if (
+      !isFiniteNumber(timestamp) ||
       !isFiniteNumber(open) ||
       !isFiniteNumber(high) ||
       !isFiniteNumber(low) ||
@@ -152,7 +185,7 @@ function buildValidCandles(timestamps: number[], quote: YahooQuote): ValidYahooC
     const typicalPrice = (high + low + close) / 3;
 
     candles.push({
-      timestamp: new Date(timestamps[index] * 1000).toISOString(),
+      timestamp: new Date(timestamp * 1000).toISOString(),
       open,
       high,
       low,
@@ -164,6 +197,64 @@ function buildValidCandles(timestamps: number[], quote: YahooQuote): ValidYahooC
   }
 
   return candles;
+}
+
+function buildProviderDiagnostics(params: {
+  stock: StockSymbolInfo;
+  result: YahooChartResult;
+  latest: ValidYahooCandle;
+  candles: ValidYahooCandle[];
+  previousCloseInferred: boolean;
+}): YahooProviderDiagnostics {
+  const notes: string[] = [];
+  const first = params.candles[0];
+  const latest = params.latest;
+
+  if (params.candles.length < 20) {
+    notes.push("Yahoo Finance 유효 캔들 수가 20개 미만입니다.");
+  }
+
+  if (params.previousCloseInferred) {
+    notes.push("전일 종가는 이전 유효 캔들 종가로 추정했습니다.");
+  }
+
+  if (isStaleDailyCandle(latest.timestamp)) {
+    notes.push("최신 일봉 기준일이 현재 날짜와 차이가 있어 데이터 지연 가능성을 확인해야 합니다.");
+  }
+
+  if (params.stock.market === "KOSPI" || params.stock.market === "KOSDAQ") {
+    notes.push("Yahoo Finance 원본 가격 스케일 확인이 필요합니다.");
+  }
+
+  if (notes.length === 0) {
+    notes.push("Yahoo Finance 원본 일봉 데이터를 변환했습니다.");
+  }
+
+  return {
+    yahooSymbol: params.stock.yahooSymbol,
+    rawCurrency: params.result.meta?.currency,
+    rawExchangeName: params.result.meta?.exchangeName,
+    rawInstrumentType: params.result.meta?.instrumentType,
+    rawRegularMarketPrice: params.result.meta?.regularMarketPrice,
+    rawPreviousClose: params.result.meta?.previousClose,
+    latestRawOpen: latest.open,
+    latestRawHigh: latest.high,
+    latestRawLow: latest.low,
+    latestRawClose: latest.close,
+    latestRawVolume: latest.volume,
+    validCandleCount: params.candles.length,
+    firstCandleDate: first?.timestamp,
+    latestCandleDate: latest.timestamp,
+    note: notes.join(" "),
+  };
+}
+
+function isStaleDailyCandle(value: string): boolean {
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  return Date.now() - timestamp > sevenDaysMs;
 }
 
 function average(values: number[]): number {

@@ -94,6 +94,39 @@ type StockAnalysisViewResult = {
   normalized?: {
     ticker?: string;
     name?: string;
+    market?: string;
+    analysisMode?: string;
+    asOf?: string;
+    currentPrice?: number;
+    close?: number;
+    volume?: number;
+    ohlcv?: {
+      timeframe?: string;
+    };
+    metadata?: {
+      providerDiagnostics?: YahooProviderDiagnostics;
+    };
+  };
+  ohlc: {
+    closePositionScore: number;
+    week52PositionScore: number;
+    previousCloseChangePercent: number;
+    intradayRangePercent: number;
+    upperWickRatio: number;
+    lowerWickRatio: number;
+  };
+  volume: {
+    volumeRatio20d: number;
+    volumeRatio10d: number;
+    volumeScore: number;
+    volumeRiskScore: number;
+  };
+  vwap: {
+    isAboveVwap: boolean;
+    isNearVwap: boolean;
+    vwapDistancePercent: number;
+    vwapScore: number;
+    vwapRiskScore: number;
   };
   finalScore: number;
   finalGrade: string;
@@ -108,6 +141,12 @@ type StockAnalysisViewResult = {
     actionScore: number;
   };
   risk: {
+    overheatingRiskScore: number;
+    volatilityRiskScore: number;
+    distributionRiskScore: number;
+    vwapBreakdownRiskScore: number;
+    lowLiquidityOrWeakParticipationRiskScore: number;
+    trendCollapseRiskScore: number;
     riskScore: number;
   };
   summary: string;
@@ -117,6 +156,24 @@ type StockAnalysisViewResult = {
     neutral: string[];
     negative: string[];
   };
+};
+
+type YahooProviderDiagnostics = {
+  yahooSymbol: string;
+  rawCurrency?: string;
+  rawExchangeName?: string;
+  rawInstrumentType?: string;
+  rawRegularMarketPrice?: number;
+  rawPreviousClose?: number;
+  latestRawOpen?: number;
+  latestRawHigh?: number;
+  latestRawLow?: number;
+  latestRawClose?: number;
+  latestRawVolume?: number;
+  validCandleCount: number;
+  firstCandleDate?: string;
+  latestCandleDate?: string;
+  note: string;
 };
 
 type StockAnalysisApiResponse = {
@@ -146,7 +203,7 @@ const gradeLabels: Record<string, string> = {
   NEUTRAL_STRUCTURE: "중립 구조",
   CAUTION_STRUCTURE: "주의 필요 구조",
   HIGH_RISK_STRUCTURE: "고위험 구조",
-  UNCLEAR_STRUCTURE: "방향성 불명확",
+  UNCLEAR_STRUCTURE: "추가 확인 필요 구조",
 };
 
 const stateLabels: Record<string, string> = {
@@ -208,6 +265,18 @@ function getActionLabel(action: string | undefined): string {
 function getUrgencyLabel(urgency: string | undefined): string {
   if (!urgency) return "확인 필요";
   return urgencyLabels[urgency] || urgency;
+}
+
+function getGradeExplanation(grade: string | undefined): string {
+  if (grade === "CAUTION_STRUCTURE") {
+    return "구체적인 주의 신호가 감지되어 우선 점검이 필요한 상태입니다.";
+  }
+
+  if (grade === "UNCLEAR_STRUCTURE") {
+    return "명확한 우위나 위험 방향이 충분히 확인되지 않은 상태입니다.";
+  }
+
+  return "현재 점수와 상태 분류를 함께 해석한 종합 구조입니다.";
 }
 
 function formatSummaryForDisplay(summary: string | undefined): string {
@@ -642,6 +711,10 @@ function AnalysisResultCard({
   const confirmedTicker = result.normalized?.ticker || "";
   const sourceLabel = meta.source === "yahoo-finance" ? "Yahoo Finance" : "샘플 데이터";
   const modeNotice = getDataModeNotice(meta.mode, meta.warning);
+  const dataBasisLabel = getDataBasisLabel(result);
+  const dataBasisValue = formatDataBasis(result);
+  const displayedWarnings = getDisplayItems(result.warnings, 5);
+  const hiddenWarningCount = Math.max(result.warnings.length - displayedWarnings.length, 0);
   const scoreItems = [
     { label: "종합 점수", value: formatScore(result.finalScore), accent: "text-cyan-200" },
     { label: "상태 점수", value: formatScore(result.state.stateScore), accent: "text-violet-200" },
@@ -656,6 +729,7 @@ function AnalysisResultCard({
           <p className="text-sm font-semibold text-cyan-200/80">분석 결과</p>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight">{gradeLabel}</h2>
           <p className="mt-1 break-all text-[10px] text-white/35">{result.finalGrade}</p>
+          <p className="mt-2 text-xs leading-6 text-white/50">{getGradeExplanation(result.finalGrade)}</p>
         </div>
         <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100/80">
           {urgencyLabel}
@@ -669,9 +743,16 @@ function AnalysisResultCard({
           {confirmedTicker ? ` (${confirmedTicker})` : ""}
         </p>
         <p className="text-xs leading-6 text-white/55">데이터 출처: {sourceLabel}</p>
+        <p className="text-xs leading-6 text-white/55">{dataBasisLabel}: {dataBasisValue}</p>
+        <p className="text-xs leading-6 text-white/55">기준 유형: {getDataBasisType(result)}</p>
         <p className="mt-2 text-xs leading-6 text-white/45">
           {modeNotice}
         </p>
+        {meta.source === "yahoo-finance" ? (
+          <p className="mt-1 text-xs leading-6 text-white/38">
+            Yahoo Finance 기준 차트 데이터이며, 거래소 및 데이터 제공 환경에 따라 지연되거나 조정된 값이 포함될 수 있습니다.
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -698,9 +779,12 @@ function AnalysisResultCard({
         <p className="text-sm font-semibold text-amber-100">확인 필요</p>
         {result.warnings.length > 0 ? (
           <ul className="mt-3 space-y-2 text-xs leading-6 text-amber-50/75">
-            {result.warnings.map((warning) => (
+            {displayedWarnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
+            {hiddenWarningCount > 0 ? (
+              <li className="text-amber-50/55">외 {hiddenWarningCount}개 확인 항목이 더 있습니다.</li>
+            ) : null}
           </ul>
         ) : (
           <p className="mt-3 text-xs leading-6 text-amber-50/65">현재 표시된 주요 경고는 없습니다.</p>
@@ -726,6 +810,140 @@ function AnalysisResultCard({
           tone="rose"
           emptyMessage="현재 강한 주의 신호는 감지되지 않았습니다."
         />
+      </div>
+
+      <DetailedAnalysisSection result={result} targetStockName={targetStockName} sourceLabel={sourceLabel} />
+    </div>
+  );
+}
+
+function DetailedAnalysisSection({
+  result,
+  targetStockName,
+  sourceLabel,
+}: {
+  result: StockAnalysisViewResult;
+  targetStockName: string;
+  sourceLabel: string;
+}) {
+  const confirmedTicker = result.normalized?.ticker || "";
+  const confirmedName = result.normalized?.name || "확인 대기";
+  const diagnostics = result.normalized?.metadata?.providerDiagnostics;
+
+  return (
+    <div className="mt-5 rounded-[2rem] border border-white/10 bg-white/[0.035] p-5 backdrop-blur-2xl">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-cyan-200/80">상세 분석 근거</p>
+          <p className="mt-1 text-xs text-white/45">점수 산출에 사용된 핵심 참고 지표입니다.</p>
+        </div>
+        <p className="text-xs text-white/45">{getDataBasisLabel(result)}: {formatDataBasis(result)}</p>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <DetailCard
+          title="가격 구조"
+          items={[
+            ["종가 위치 점수", formatScore(result.ohlc.closePositionScore)],
+            ["52주 위치 점수", formatScore(result.ohlc.week52PositionScore)],
+            ["전일 대비 등락률", formatPercent(result.ohlc.previousCloseChangePercent)],
+            ["장중 변동폭", formatPercent(result.ohlc.intradayRangePercent)],
+            ["윗꼬리 비율", formatPercent(result.ohlc.upperWickRatio)],
+            ["아랫꼬리 비율", formatPercent(result.ohlc.lowerWickRatio)],
+          ]}
+        />
+        <DetailCard
+          title="거래량 구조"
+          items={[
+            ["20일 평균 대비 거래량", formatPercent(result.volume.volumeRatio20d)],
+            ["10일 평균 대비 거래량", formatPercent(result.volume.volumeRatio10d)],
+            ["거래량 점수", formatScore(result.volume.volumeScore)],
+            ["거래량 리스크 점수", formatScore(result.volume.volumeRiskScore)],
+          ]}
+        />
+        <DetailCard
+          title="VWAP 구조"
+          items={[
+            ["VWAP 위치", result.vwap.isAboveVwap ? "VWAP 위" : "VWAP 아래"],
+            ["VWAP 근접 여부", result.vwap.isNearVwap ? "근접" : "이격"],
+            ["VWAP 이격률", formatPercent(result.vwap.vwapDistancePercent)],
+            ["VWAP 점수", formatScore(result.vwap.vwapScore)],
+            ["VWAP 리스크 점수", formatScore(result.vwap.vwapRiskScore)],
+          ]}
+        />
+        <DetailCard
+          title="리스크 구조"
+          items={[
+            ["과열 위험", formatScore(result.risk.overheatingRiskScore)],
+            ["변동성 위험", formatScore(result.risk.volatilityRiskScore)],
+            ["분배/가짜 돌파 위험", formatScore(result.risk.distributionRiskScore)],
+            ["VWAP 이탈 위험", formatScore(result.risk.vwapBreakdownRiskScore)],
+            ["거래 참여 약화 위험", formatScore(result.risk.lowLiquidityOrWeakParticipationRiskScore)],
+            ["추세 붕괴 위험", formatScore(result.risk.trendCollapseRiskScore)],
+            ["종합 리스크 점수", formatScore(result.risk.riskScore)],
+          ]}
+        />
+        <DetailCard
+          title="데이터 기준"
+          items={[
+            ["분석 대상", targetStockName || "샘플 종목"],
+            ["확인 종목", `${confirmedName}${confirmedTicker ? ` (${confirmedTicker})` : ""}`],
+            ["시장", result.normalized?.market || "-"],
+            ["데이터 출처", sourceLabel],
+            [getDataBasisLabel(result), formatDataBasis(result)],
+            ["기준 유형", getDataBasisType(result)],
+            ["분석 모드", result.normalized?.analysisMode || "-"],
+            ["현재가/종가", formatNumber(result.normalized?.currentPrice || result.normalized?.close)],
+            ["거래량", formatNumber(result.normalized?.volume)],
+          ]}
+        />
+        {diagnostics ? (
+          <DetailCard
+            title="데이터 원본 확인"
+            muted
+            items={[
+              ["Yahoo 심볼", diagnostics.yahooSymbol],
+              ["원본 통화", diagnostics.rawCurrency || "-"],
+              ["원본 거래소", diagnostics.rawExchangeName || "-"],
+              ["원본 상품 유형", diagnostics.rawInstrumentType || "-"],
+              ["원본 현재가", formatNumber(diagnostics.rawRegularMarketPrice)],
+              ["원본 전일 종가", formatNumber(diagnostics.rawPreviousClose)],
+              ["원본 최신 시가", formatNumber(diagnostics.latestRawOpen)],
+              ["원본 최신 고가", formatNumber(diagnostics.latestRawHigh)],
+              ["원본 최신 저가", formatNumber(diagnostics.latestRawLow)],
+              ["원본 최신 종가", formatNumber(diagnostics.latestRawClose)],
+              ["원본 최신 거래량", formatNumber(diagnostics.latestRawVolume)],
+              ["유효 캔들 수", formatNumber(diagnostics.validCandleCount)],
+              ["첫 캔들 기준일", formatDateOnly(diagnostics.firstCandleDate)],
+              ["최신 캔들 기준일", formatDateOnly(diagnostics.latestCandleDate)],
+              ["진단 메모", diagnostics.note],
+            ]}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function DetailCard({
+  title,
+  items,
+  muted = false,
+}: {
+  title: string;
+  items: Array<[string, string]>;
+  muted?: boolean;
+}) {
+  return (
+    <div className={`rounded-3xl border border-white/10 bg-black/20 p-4 ${muted ? "text-white/70" : ""}`}>
+      <p className="text-sm font-semibold text-white/82">{title}</p>
+      <div className="mt-4 grid gap-2">
+        {items.map(([label, value]) => (
+          <div key={label} className="flex items-center justify-between gap-4 text-xs">
+            <span className="text-white/45">{label}</span>
+            <span className="text-right font-semibold text-white/75">{value}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -771,8 +989,71 @@ function EvidenceList({
   );
 }
 
-function formatScore(value: number) {
-  return Number.isFinite(value) ? value.toFixed(0) : "-";
+function getDisplayItems(items: string[] | undefined, limit = 5): string[] {
+  if (!items) return [];
+  return items.slice(0, limit);
+}
+
+function formatNumber(value: number | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return value.toLocaleString("ko-KR", {
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatPercent(value: number | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return `${value.toFixed(1)}%`;
+}
+
+function formatScore(value: number | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return value.toFixed(0);
+}
+
+function formatDateTime(value: string | undefined): string {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatDateOnly(value: string | undefined): string {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+
+  return date.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function isDailyEodResult(result: StockAnalysisViewResult): boolean {
+  return result.normalized?.analysisMode === "EOD" || result.normalized?.ohlcv?.timeframe === "1d";
+}
+
+function getDataBasisLabel(result: StockAnalysisViewResult): string {
+  return isDailyEodResult(result) ? "데이터 기준일" : "데이터 기준";
+}
+
+function getDataBasisType(result: StockAnalysisViewResult): string {
+  return isDailyEodResult(result) ? "일봉 차트 기준" : "차트 기준";
+}
+
+function formatDataBasis(result: StockAnalysisViewResult): string {
+  if (isDailyEodResult(result)) return formatDateOnly(result.normalized?.asOf);
+  return formatDateTime(result.normalized?.asOf);
 }
 
 function getDataModeNotice(mode: AnalysisMeta["mode"], warning: string): string {
