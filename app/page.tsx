@@ -178,23 +178,32 @@ type YahooProviderDiagnostics = {
 
 type StockAnalysisApiResponse = {
   success: boolean;
-  mode?: "real-data" | "sample-fallback" | "sample";
-  source?: "yahoo-finance" | "sample";
+  mode?: StockDataFreshness["mode"];
+  source?: StockDataFreshness["provider"];
+  freshness?: StockDataFreshness;
+  diagnostics?: unknown;
   warning?: string;
-  stock?: {
-    name: string;
-    code: string;
-    yahooSymbol: string;
-  };
   data?: StockAnalysisViewResult;
   error?: string;
   detail?: string;
 };
 
 type AnalysisMeta = {
-  mode: StockAnalysisApiResponse["mode"];
-  source: StockAnalysisApiResponse["source"];
+  freshness?: StockDataFreshness;
   warning: string;
+};
+
+type StockDataFreshness = {
+  provider: "yahoo-finance" | "kis-developers" | "sample";
+  mode: "EOD" | "INTRADAY" | "SAMPLE" | "FALLBACK";
+  isRealtime: boolean;
+  isSameDayData: boolean;
+  isConfirmedEOD: boolean;
+  baseDate?: string;
+  baseDateTime?: string;
+  timezone: string;
+  sourceLabel: string;
+  cautionMessage: string;
 };
 
 const gradeLabels: Record<string, string> = {
@@ -301,8 +310,7 @@ export default function Home() {
   const [stockNameInput, setStockNameInput] = useState("삼성전자");
   const [analyzedStockName, setAnalyzedStockName] = useState("");
   const [analysisMeta, setAnalysisMeta] = useState<AnalysisMeta>({
-    mode: undefined,
-    source: undefined,
+    freshness: undefined,
     warning: "",
   });
 
@@ -332,8 +340,7 @@ export default function Home() {
       setAnalysisResult(payload.data);
       setAnalyzedStockName(selectedStockName);
       setAnalysisMeta({
-        mode: payload.mode,
-        source: payload.source,
+        freshness: payload.freshness,
         warning: payload.warning || "",
       });
     } catch (error) {
@@ -709,66 +716,90 @@ function AnalysisResultCard({
   const displayedStockName = targetStockName || result.normalized?.name || "샘플 종목";
   const confirmedStockName = result.normalized?.name || "확인 대기";
   const confirmedTicker = result.normalized?.ticker || "";
-  const sourceLabel = meta.source === "yahoo-finance" ? "Yahoo Finance" : "샘플 데이터";
-  const modeNotice = getDataModeNotice(meta.mode, meta.warning);
+  const sourceLabel = meta.freshness?.sourceLabel || "샘플 데이터";
+  const modeNotice = getDataModeNotice(meta.freshness, meta.warning);
   const dataBasisLabel = getDataBasisLabel(result);
   const dataBasisValue = formatDataBasis(result);
   const displayedWarnings = getDisplayItems(result.warnings, 5);
-  const hiddenWarningCount = Math.max(result.warnings.length - displayedWarnings.length, 0);
   const scoreItems = [
-    { label: "종합 점수", value: formatScore(result.finalScore), accent: "text-cyan-200" },
-    { label: "상태 점수", value: formatScore(result.state.stateScore), accent: "text-violet-200" },
-    { label: "신뢰도", value: formatScore(result.state.confidenceScore), accent: "text-emerald-200" },
-    { label: "리스크 점수", value: formatScore(result.risk.riskScore), accent: "text-amber-200" },
+    { key: "finalScore", title: "종합 점수", score: result.finalScore, type: "normal" as const },
+    { key: "stateScore", title: "상태 분류 신뢰도", score: result.state.stateScore, type: "normal" as const },
+    { key: "confidenceScore", title: "신뢰도", score: result.state.confidenceScore, type: "normal" as const },
+    { key: "riskScore", title: "리스크 점수", score: result.risk.riskScore, type: "risk" as const },
   ];
 
   return (
     <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_90px_-64px_rgba(34,211,238,0.9)] backdrop-blur-2xl">
-      <div className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-cyan-200/80">분석 결과</p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight">{gradeLabel}</h2>
-          <p className="mt-1 break-all text-[10px] text-white/35">{result.finalGrade}</p>
-          <p className="mt-2 text-xs leading-6 text-white/50">{getGradeExplanation(result.finalGrade)}</p>
-        </div>
-        <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100/80">
-          {urgencyLabel}
-        </span>
-      </div>
-
-      <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
         <p className="text-sm font-semibold text-white/82">분석 대상: {displayedStockName}</p>
         <p className="mt-2 text-xs leading-6 text-white/55">
           확인 종목: {confirmedStockName}
           {confirmedTicker ? ` (${confirmedTicker})` : ""}
         </p>
         <p className="text-xs leading-6 text-white/55">데이터 출처: {sourceLabel}</p>
+        <p className="text-xs leading-6 text-white/55">데이터 모드: {getDataModeLabel(meta.freshness?.mode)}</p>
+        <p className="text-xs leading-6 text-white/55">
+          당일 데이터 여부: {meta.freshness?.isSameDayData ? "당일 데이터 반영" : "당일 데이터가 아닐 수 있음"}
+        </p>
+        <p className="text-xs leading-6 text-white/55">
+          실시간 여부: {meta.freshness?.isRealtime ? "실시간 또는 준실시간" : "실시간 데이터 아님"}
+        </p>
         <p className="text-xs leading-6 text-white/55">{dataBasisLabel}: {dataBasisValue}</p>
-        <p className="text-xs leading-6 text-white/55">기준 유형: {getDataBasisType(result)}</p>
+        {meta.freshness?.mode === "INTRADAY" ? (
+          <p className="text-xs leading-6 text-white/55">
+            기준 시각: {formatDateTime(meta.freshness.baseDateTime)}
+          </p>
+        ) : null}
+        <p className="text-xs leading-6 text-white/55">기준 유형: {getDataBasisType(result, meta.freshness)}</p>
         <p className="mt-2 text-xs leading-6 text-white/45">
           {modeNotice}
         </p>
-        {meta.source === "yahoo-finance" ? (
+        {meta.freshness?.provider === "yahoo-finance" ? (
           <p className="mt-1 text-xs leading-6 text-white/38">
-            Yahoo Finance 기준 차트 데이터이며, 거래소 및 데이터 제공 환경에 따라 지연되거나 조정된 값이 포함될 수 있습니다.
+            {meta.freshness.cautionMessage}
           </p>
         ) : null}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {scoreItems.map((item) => (
-          <div key={item.label} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <p className="text-xs text-white/45">{item.label}</p>
-            <p className={`mt-2 text-2xl font-semibold ${item.accent}`}>{item.value}</p>
+      <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-cyan-200/80">현재 상태 요약</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight">{gradeLabel}</h2>
+            <p className="mt-2 text-xs leading-6 text-white/50">{getGradeExplanation(result.finalGrade)}</p>
           </div>
-        ))}
+          <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100/80">
+            {urgencyLabel}
+          </span>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <InfoPill label="상태 분류" value={stateLabel} />
+          <InfoPill label="대응 라벨" value={actionLabel} />
+          <InfoPill label="대응 점수" value={formatScore(result.action.actionScore)} />
+          <InfoPill label="확인 필요" value={`${result.warnings.length}건`} />
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+        <p className="text-xs font-semibold text-cyan-200/80">현재 이 종목을 한 문장으로 해석하면</p>
+        <p className="mt-2 text-sm leading-7 text-white/72">{buildOneLineInterpretation(result)}</p>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <InfoPill label="상태 분류" value={stateLabel} rawValue={result.state.primaryState} />
-        <InfoPill label="대응 라벨" value={actionLabel} rawValue={result.action.actionCode} />
-        <InfoPill label="대응 점수" value={formatScore(result.action.actionScore)} />
-        <InfoPill label="확인 필요" value={`${result.warnings.length}건`} />
+        <div className="rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.055] p-4 text-sm leading-7 text-cyan-50/78 sm:col-span-2">
+          일반 점수는 높을수록 긍정적이며, 리스크 점수는 높을수록 위험합니다. 색상 막대는 현재 점수의
+          강도와 위험 수준을 한눈에 보여줍니다. 점수는 단독 판단이 아니라 가격 위치, 거래량, VWAP,
+          변동성, 추세 조건을 함께 본 결과입니다.
+        </div>
+        {scoreItems.map((item) => (
+          <ScoreCard
+            key={item.key}
+            scoreKey={item.key}
+            title={item.title}
+            score={item.score}
+            type={item.type}
+          />
+        ))}
       </div>
 
       <p className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-7 text-white/66">
@@ -776,43 +807,26 @@ function AnalysisResultCard({
       </p>
 
       <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4">
-        <p className="text-sm font-semibold text-amber-100">확인 필요</p>
+        <p className="text-sm font-semibold text-amber-100">핵심 확인 요약</p>
         {result.warnings.length > 0 ? (
           <ul className="mt-3 space-y-2 text-xs leading-6 text-amber-50/75">
             {displayedWarnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
-            {hiddenWarningCount > 0 ? (
-              <li className="text-amber-50/55">외 {hiddenWarningCount}개 확인 항목이 더 있습니다.</li>
-            ) : null}
           </ul>
         ) : (
           <p className="mt-3 text-xs leading-6 text-amber-50/65">현재 표시된 주요 경고는 없습니다.</p>
         )}
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <EvidenceList
-          title="긍정 지표"
-          items={result.evidence.positive}
-          tone="cyan"
-          emptyMessage="현재 뚜렷한 긍정 지표는 추가 확인이 필요합니다."
-        />
-        <EvidenceList
-          title="중립 지표"
-          items={result.evidence.neutral}
-          tone="violet"
-          emptyMessage="현재 중립 지표는 별도로 표시되지 않았습니다."
-        />
-        <EvidenceList
-          title="주의 지표"
-          items={result.evidence.negative}
-          tone="rose"
-          emptyMessage="현재 강한 주의 신호는 감지되지 않았습니다."
-        />
-      </div>
+      <IndicatorSections result={result} />
 
-      <DetailedAnalysisSection result={result} targetStockName={targetStockName} sourceLabel={sourceLabel} />
+      <DetailedAnalysisSection
+        result={result}
+        targetStockName={targetStockName}
+        sourceLabel={sourceLabel}
+        freshness={meta.freshness}
+      />
     </div>
   );
 }
@@ -821,14 +835,51 @@ function DetailedAnalysisSection({
   result,
   targetStockName,
   sourceLabel,
+  freshness,
 }: {
   result: StockAnalysisViewResult;
   targetStockName: string;
   sourceLabel: string;
+  freshness?: StockDataFreshness;
 }) {
   const confirmedTicker = result.normalized?.ticker || "";
   const confirmedName = result.normalized?.name || "확인 대기";
   const diagnostics = result.normalized?.metadata?.providerDiagnostics;
+  const detailedScores = [
+    { key: "closePositionScore", title: "종가 위치 점수", score: result.ohlc.closePositionScore, type: "normal" as const },
+    { key: "week52PositionScore", title: "52주 위치 점수", score: result.ohlc.week52PositionScore, type: "normal" as const },
+    { key: "volumeScore", title: "거래량 점수", score: result.volume.volumeScore, type: "normal" as const },
+    { key: "vwapScore", title: "VWAP 점수", score: result.vwap.vwapScore, type: "normal" as const },
+    { key: "volumeRiskScore", title: "거래량 리스크 점수", score: result.volume.volumeRiskScore, type: "risk" as const },
+    { key: "vwapRiskScore", title: "VWAP 리스크 점수", score: result.vwap.vwapRiskScore, type: "risk" as const },
+    { key: "overheatingRiskScore", title: "과열 위험", score: result.risk.overheatingRiskScore, type: "risk" as const },
+    { key: "volatilityRiskScore", title: "변동성 위험", score: result.risk.volatilityRiskScore, type: "risk" as const },
+    {
+      key: "distributionRiskScore",
+      title: "분배/가짜 돌파 위험",
+      score: result.risk.distributionRiskScore,
+      type: "risk" as const,
+    },
+    {
+      key: "vwapBreakdownRiskScore",
+      title: "VWAP 이탈 위험",
+      score: result.risk.vwapBreakdownRiskScore,
+      type: "risk" as const,
+    },
+    {
+      key: "lowLiquidityOrWeakParticipationRiskScore",
+      title: "거래 참여 약화 위험",
+      score: result.risk.lowLiquidityOrWeakParticipationRiskScore,
+      type: "risk" as const,
+    },
+    {
+      key: "trendCollapseRiskScore",
+      title: "추세 붕괴 위험",
+      score: result.risk.trendCollapseRiskScore,
+      type: "risk" as const,
+    },
+    { key: "riskScore", title: "종합 리스크 점수", score: result.risk.riskScore, type: "risk" as const },
+  ];
 
   return (
     <div className="mt-5 rounded-[2rem] border border-white/10 bg-white/[0.035] p-5 backdrop-blur-2xl">
@@ -837,7 +888,19 @@ function DetailedAnalysisSection({
           <p className="text-sm font-semibold text-cyan-200/80">상세 분석 근거</p>
           <p className="mt-1 text-xs text-white/45">점수 산출에 사용된 핵심 참고 지표입니다.</p>
         </div>
-        <p className="text-xs text-white/45">{getDataBasisLabel(result)}: {formatDataBasis(result)}</p>
+        <p className="text-xs text-white/45">{getDataBasisLabel(result)}: {formatDataBasis(result, freshness)}</p>
+      </div>
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {detailedScores.map((item) => (
+          <ScoreCard
+            key={item.key}
+            scoreKey={item.key}
+            title={item.title}
+            score={item.score}
+            type={item.type}
+          />
+        ))}
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -890,8 +953,11 @@ function DetailedAnalysisSection({
             ["확인 종목", `${confirmedName}${confirmedTicker ? ` (${confirmedTicker})` : ""}`],
             ["시장", result.normalized?.market || "-"],
             ["데이터 출처", sourceLabel],
-            [getDataBasisLabel(result), formatDataBasis(result)],
-            ["기준 유형", getDataBasisType(result)],
+            ["데이터 모드", getDataModeLabel(freshness?.mode)],
+            ["당일 데이터 여부", freshness?.isSameDayData ? "당일 데이터 반영" : "당일 데이터가 아닐 수 있음"],
+            ["실시간 여부", freshness?.isRealtime ? "실시간 또는 준실시간" : "실시간 데이터 아님"],
+            [getDataBasisLabel(result), formatDataBasis(result, freshness)],
+            ["기준 유형", getDataBasisType(result, freshness)],
             ["분석 모드", result.normalized?.analysisMode || "-"],
             ["현재가/종가", formatNumber(result.normalized?.currentPrice || result.normalized?.close)],
             ["거래량", formatNumber(result.normalized?.volume)],
@@ -921,6 +987,117 @@ function DetailedAnalysisSection({
           />
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function ScoreCard({
+  scoreKey,
+  title,
+  score,
+  type,
+}: {
+  scoreKey: string;
+  title: string;
+  score: number;
+  type: "normal" | "risk";
+}) {
+  const safeScore = clampUiScore(score);
+  const label = type === "risk" ? getRiskScoreLabel(safeScore) : getNormalScoreLabel(safeScore);
+  const colorClass = type === "risk" ? getRiskScoreColor(safeScore) : getNormalScoreColor(safeScore);
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs text-white/45">{title}</p>
+          <p className="mt-2 text-2xl font-semibold text-white">{formatScore(safeScore)}점 / 100점</p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${colorClass.badge}`}>
+          {label}
+        </span>
+      </div>
+      <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${colorClass.bar}`}
+          style={{ width: `${safeScore}%` }}
+        />
+      </div>
+      <p className="mt-3 text-xs leading-6 text-white/58">{getScoreDescription(scoreKey, safeScore, type)}</p>
+    </div>
+  );
+}
+
+function IndicatorSections({ result }: { result: StockAnalysisViewResult }) {
+  return (
+    <div className="mt-4 grid gap-3 lg:grid-cols-2">
+      <IndicatorList
+        title="긍정 지표"
+        badge="긍정"
+        items={result.evidence.positive}
+        tone="green"
+        emptyMessage="현재 뚜렷한 긍정 지표는 추가 확인이 필요합니다."
+      />
+      <IndicatorList
+        title="중립 지표"
+        badge="중립"
+        items={result.evidence.neutral}
+        tone="yellow"
+        emptyMessage="현재 중립 지표는 별도로 표시되지 않았습니다."
+      />
+      <IndicatorList
+        title="주의 지표"
+        badge="주의"
+        items={result.evidence.negative}
+        tone="orange"
+        emptyMessage="현재 강한 주의 신호는 감지되지 않았습니다."
+      />
+      <IndicatorList
+        title="확인 필요 지표"
+        badge="확인"
+        items={result.warnings}
+        tone="red"
+        emptyMessage="현재 표시된 주요 확인 항목은 없습니다."
+      />
+    </div>
+  );
+}
+
+function IndicatorList({
+  title,
+  badge,
+  items,
+  tone,
+  emptyMessage,
+}: {
+  title: string;
+  badge: string;
+  items: string[];
+  tone: "green" | "yellow" | "orange" | "red";
+  emptyMessage: string;
+}) {
+  const toneClass = getIndicatorToneClass(tone);
+  const uniqueItems = uniqueDetailedIndicatorMessages(items);
+
+  return (
+    <div className={`rounded-2xl border p-4 ${toneClass.box}`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold">{title}</p>
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${toneClass.badge}`}>
+          {badge}
+        </span>
+      </div>
+      {uniqueItems.length > 0 ? (
+        <ul className="mt-4 space-y-3 text-xs leading-6 text-white/70">
+          {uniqueItems.map((item) => (
+            <li key={item} className="rounded-2xl border border-white/10 bg-black/18 p-3">
+              {item}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-xs leading-6 text-white/45">{emptyMessage}</p>
+      )}
     </div>
   );
 }
@@ -991,7 +1168,184 @@ function EvidenceList({
 
 function getDisplayItems(items: string[] | undefined, limit = 5): string[] {
   if (!items) return [];
-  return items.slice(0, limit);
+  return uniqueDetailedIndicatorMessages(items).slice(0, limit);
+}
+
+function uniqueDetailedIndicatorMessages(items: string[] | undefined): string[] {
+  if (!items) return [];
+  return Array.from(new Set(items.filter(Boolean).map((item) => getIndicatorDetailMessage(item))));
+}
+
+function clampUiScore(score: number): number {
+  if (!Number.isFinite(score)) return 0;
+  return Math.min(Math.max(score, 0), 100);
+}
+
+function getNormalScoreLabel(score: number): string {
+  if (score >= 80) return "매우 좋음";
+  if (score >= 60) return "양호";
+  if (score >= 40) return "중립";
+  if (score >= 20) return "약함";
+  return "매우 약함";
+}
+
+function getRiskScoreLabel(score: number): string {
+  if (score >= 80) return "매우 높음";
+  if (score >= 60) return "위험 높음";
+  if (score >= 40) return "보통";
+  if (score >= 20) return "관리 가능";
+  return "낮음";
+}
+
+function getNormalScoreColor(score: number) {
+  if (score >= 80) return { bar: "bg-emerald-400", badge: "bg-emerald-300/15 text-emerald-100" };
+  if (score >= 60) return { bar: "bg-teal-400", badge: "bg-teal-300/15 text-teal-100" };
+  if (score >= 40) return { bar: "bg-yellow-300", badge: "bg-yellow-300/15 text-yellow-100" };
+  if (score >= 20) return { bar: "bg-orange-400", badge: "bg-orange-300/15 text-orange-100" };
+  return { bar: "bg-red-500", badge: "bg-red-400/15 text-red-100" };
+}
+
+function getRiskScoreColor(score: number) {
+  if (score >= 80) return { bar: "bg-red-800", badge: "bg-red-500/20 text-red-100" };
+  if (score >= 60) return { bar: "bg-red-500", badge: "bg-red-400/15 text-red-100" };
+  if (score >= 40) return { bar: "bg-yellow-300", badge: "bg-yellow-300/15 text-yellow-100" };
+  if (score >= 20) return { bar: "bg-emerald-400", badge: "bg-emerald-300/15 text-emerald-100" };
+  return { bar: "bg-green-400", badge: "bg-green-300/15 text-green-100" };
+}
+
+function getScoreDescription(scoreKey: string, score: number, type: "normal" | "risk"): string {
+  if (type === "risk") {
+    const riskText =
+      score >= 60
+        ? "위험 신호가 강해진 상태입니다. 가격 위치, VWAP 회복 여부, 변동성 확대 여부를 함께 확인해야 합니다."
+        : "위험 수준은 과도한 구간은 아니지만, 세부 약세 신호가 동시에 나타나는지 계속 점검해야 합니다.";
+
+    const riskDescriptions: Record<string, string> = {
+      riskScore: `전체 리스크를 종합한 점수입니다. ${riskText}`,
+      volumeRiskScore:
+        "거래량 증가가 가격 회복을 동반하지 못하면 분배성 물량일 수 있습니다. 거래량과 종가 위치가 같은 방향인지 확인해야 합니다.",
+      vwapRiskScore:
+        "VWAP를 안정적으로 지지하지 못하면 단기 반등 신뢰도가 낮아질 수 있습니다. VWAP 재회복과 유지 여부가 중요합니다.",
+      overheatingRiskScore:
+        "단기 과열 위험은 가격이 빠르게 오른 뒤 변동성이 커질 가능성을 뜻합니다. 상승폭과 VWAP 이격률을 함께 확인해야 합니다.",
+      volatilityRiskScore:
+        "변동성 위험은 장중 가격 흔들림이 큰 상태를 뜻합니다. 고점 돌파보다 종가가 어느 위치에 남았는지가 중요합니다.",
+      distributionRiskScore:
+        "윗꼬리와 거래량이 함께 커지면 상단 매물 부담이 커질 수 있습니다. 가격이 고점권을 유지하는지 확인해야 합니다.",
+      vwapBreakdownRiskScore:
+        "VWAP 이탈 위험은 평균 거래 단가 아래에서 가격이 머무는지를 봅니다. 회복 실패가 반복되면 단기 신뢰도가 낮아질 수 있습니다.",
+      lowLiquidityOrWeakParticipationRiskScore:
+        "거래 참여 약화 위험은 가격 움직임을 뒷받침하는 참여가 충분한지 봅니다. 거래량 회복 여부를 확인해야 합니다.",
+      trendCollapseRiskScore:
+        "추세 붕괴 위험은 주요 가격선과 종가 위치가 약해졌는지 봅니다. VWAP와 종가 회복 여부를 함께 점검해야 합니다.",
+    };
+
+    return riskDescriptions[scoreKey] || riskText;
+  }
+
+  const normalDescriptions: Record<string, string> = {
+    finalScore:
+      "가격, 거래량, VWAP, 상태 분류, 대응 라벨을 함께 반영한 종합 구조 점수입니다. 높을수록 구조가 안정적으로 정렬된 상태입니다.",
+    stateScore:
+      "현재 상태가 좋다는 의미가 아니라, AI가 현재 종목을 특정 상태로 얼마나 뚜렷하게 분류했는지를 나타냅니다. 점수가 높을수록 현재 분류 결과의 근거가 강하다는 뜻입니다.",
+    confidenceScore:
+      "가장 높은 상태 분류와 다른 후보 상태의 차이를 반영합니다. 높을수록 현재 해석의 일관성이 좋습니다.",
+    closePositionScore:
+      "종가가 당일 고가와 저가 사이에서 어디에 마감했는지 보여줍니다. 높을수록 마감 위치가 강합니다.",
+    week52PositionScore:
+      "현재 가격이 52주 범위에서 어느 위치인지 보여줍니다. 극단값이 아니라면 다른 지표와 함께 해석해야 합니다.",
+    volumeScore:
+      "거래량이 평균 대비 얼마나 의미 있게 유지되는지 보여줍니다. 가격 회복과 함께 나타날 때 신뢰도가 높아집니다.",
+    vwapScore:
+      "가격이 평균 거래 단가인 VWAP 기준으로 얼마나 안정적인 위치에 있는지 보여줍니다. 낮으면 VWAP 회복 여부가 중요합니다.",
+  };
+
+  return normalDescriptions[scoreKey] || "현재 점수가 높을수록 해당 조건이 긍정적으로 정렬되어 있음을 의미합니다.";
+}
+
+function getIndicatorToneClass(tone: "green" | "yellow" | "orange" | "red") {
+  if (tone === "green") {
+    return { box: "border-emerald-300/15 bg-emerald-300/[0.05] text-emerald-50", badge: "bg-emerald-300/15 text-emerald-100" };
+  }
+  if (tone === "yellow") {
+    return { box: "border-yellow-300/15 bg-yellow-300/[0.05] text-yellow-50", badge: "bg-yellow-300/15 text-yellow-100" };
+  }
+  if (tone === "orange") {
+    return { box: "border-orange-300/15 bg-orange-300/[0.05] text-orange-50", badge: "bg-orange-300/15 text-orange-100" };
+  }
+  return { box: "border-rose-300/15 bg-rose-300/[0.05] text-rose-50", badge: "bg-rose-300/15 text-rose-100" };
+}
+
+function buildOneLineInterpretation(result: StockAnalysisViewResult): string {
+  if (result.risk.vwapBreakdownRiskScore >= 70 && result.risk.trendCollapseRiskScore >= 80) {
+    return "현재 종목은 VWAP 약세와 추세 붕괴 위험이 동시에 높아 단기 신뢰도가 낮은 상태입니다.";
+  }
+  if (result.ohlc.closePositionScore <= 20) {
+    return "종가가 저가권에 가까워 장 마감 기준으로 매도 압력이 우세했을 가능성이 있습니다.";
+  }
+  if (result.volume.volumeScore >= 50 && result.risk.riskScore < 60) {
+    return "거래량 관심은 유지되고 있으며 전체 리스크는 아직 통제 가능한 범위입니다.";
+  }
+  if (result.vwap.vwapRiskScore >= 70 || result.risk.trendCollapseRiskScore >= 70) {
+    return "VWAP와 추세 관련 약세 신호가 있어 단기적으로는 회복 여부를 신중하게 확인해야 하는 상태입니다.";
+  }
+  return "현재 종목은 가격 위치, 거래량, VWAP, 리스크 신호가 혼재되어 다음 흐름 확인이 필요한 상태입니다.";
+}
+
+function getIndicatorDetailMessage(message: string): string {
+  const detailMap: Record<string, string> = {
+    "VWAP 관련 약세 또는 가짜 강세 위험이 높습니다.":
+      "현재 가격이 평균 거래 단가인 VWAP 아래에 위치해 있어, 장중 반등이 나오더라도 실제 매수세가 강하게 유입된 상승인지 확인이 필요합니다. 특히 VWAP를 회복하지 못한 상태에서 일시적으로 가격만 반등했다면, 단기 매수세가 약한 가짜 강세일 가능성이 있습니다.",
+    "장중 변동성이 높아 신호 안정성이 낮아질 수 있습니다.":
+      "오늘 장중 고가와 저가의 차이가 크게 벌어진 상태라면, 가격 신호가 안정적으로 유지되기보다 단기 수급과 심리에 따라 흔들렸을 가능성이 큽니다. 이런 구간에서는 단순 상승 또는 하락만 보기보다, 변동폭이 확대된 이후 종가가 어느 위치에 마감했는지 함께 확인해야 합니다.",
+    "추세 붕괴 위험이 높아 상태 유지 조건 확인이 필요합니다.":
+      "현재 가격 흐름이 기존 상승 또는 반등 구조를 유지하지 못하고 주요 기준선 아래로 밀렸을 가능성이 있습니다. 특히 종가가 약하고 VWAP 회복도 실패했다면, 단기 추세가 단순 조정이 아니라 약세 전환으로 바뀌는 구간인지 확인해야 합니다.",
+    "VWAP 이탈 또는 평균 단가 하회 위험을 점검해야 합니다.":
+      "현재 가격이 장중 평균 거래 단가인 VWAP를 하회하고 있다면, 당일 매수한 투자자들의 평균 단가보다 낮은 위치에서 거래되고 있다는 의미입니다. 이 상태가 지속되면 단기 매수세보다 매도 압력이 우세할 수 있으므로, VWAP 재돌파 여부와 재이탈 여부를 함께 확인해야 합니다.",
+    "VWAP 약세 위험 점수가 높습니다.":
+      "VWAP 관련 위험 점수가 높다는 것은 가격이 평균 거래 단가를 안정적으로 지지하지 못하고 있다는 뜻입니다. 단기 반등이 나오더라도 VWAP 위에서 유지되지 못하면 상승 신뢰도는 낮아지고, 다시 매도 압력이 커질 수 있습니다.",
+    "현재 종합 리스크는 통제 가능한 범위로 평가됩니다.":
+      "현재 전체 리스크 점수는 극단적인 위험 구간까지 올라간 상태는 아닙니다. 즉, 일부 약세 신호가 있더라도 종목 구조가 즉시 붕괴된 상태로 보기는 어렵고, VWAP 회복 여부와 종가 위치 개선 여부에 따라 단기 흐름이 다시 안정될 가능성은 남아 있습니다.",
+    "리스크 점수가 과도하게 높지 않아 현재 구조가 급격히 훼손된 상태는 아닙니다.":
+      "종합 리스크가 과도하게 높지 않다는 것은 현재 가격 구조가 완전히 무너진 상태는 아니라는 의미입니다. 다만 세부 리스크 중 VWAP 이탈 위험이나 추세 붕괴 위험이 높다면, 전체 리스크가 보통이어도 단기 대응은 신중하게 해야 합니다.",
+    "리스크 점수가 과도하지 않아 단기 구조가 완전히 훼손된 상태는 아닙니다.":
+      "종합 리스크가 과도하게 높지 않다는 것은 현재 가격 구조가 완전히 무너진 상태는 아니라는 의미입니다. 다만 세부 리스크 중 VWAP 이탈 위험이나 추세 붕괴 위험이 높다면, 전체 리스크가 보통이어도 단기 대응은 신중하게 해야 합니다.",
+    "거래량 점수가 일정 수준 이상으로 확인되어 관심 구간으로 볼 수 있습니다.":
+      "거래량 점수가 일정 수준 이상이라는 것은 시장 참여가 완전히 식은 상태는 아니라는 의미입니다. 가격이 약하더라도 거래가 유지되고 있다면, 향후 VWAP 회복이나 종가 반등이 나올 때 관심 구간으로 전환될 수 있습니다.",
+    "52주 가격 위치는 극단 구간이 아니어서 단독 판단보다는 다른 신호와 함께 봐야 합니다.":
+      "현재 가격의 52주 위치는 지나치게 낮거나 지나치게 높은 극단 구간으로만 해석하기 어렵습니다. 따라서 이 지표 하나만으로 저평가 또는 고평가를 판단하기보다는, 최근 거래량 변화, VWAP 위치, 종가 마감 위치, 추세 유지 여부를 함께 확인해야 합니다.",
+    "장중 변동폭 확대 구간에서는 가격 신호의 지속성을 추가로 확인해야 합니다.":
+      "장중 변동폭이 확대된 날에는 가격이 한 방향으로 안정적으로 움직였다기보다 매수세와 매도세가 강하게 충돌했을 가능성이 큽니다. 이런 경우 장중 고점 돌파보다 종가가 고점권에 남았는지, 또는 저가권으로 밀렸는지가 더 중요한 판단 기준이 됩니다.",
+    "일부 점수는 양호하지만 상태 분류를 확정하기에는 추가 확인이 필요합니다.":
+      "일부 지표가 긍정적으로 나오더라도 VWAP, 종가 위치, 변동성, 추세 위험이 서로 엇갈리면 현재 상태를 강세 또는 약세로 단정하기 어렵습니다. 이 경우 다음 거래일에 가격이 VWAP 위에서 유지되는지, 거래량이 동반되는지, 종가가 회복되는지를 추가로 확인해야 합니다.",
+    "일부 조건은 양호하지만 방향성 판단에는 추가 확인이 필요합니다.":
+      "일부 조건은 양호하지만 가격 위치, 거래량, VWAP, 변동성 조건이 완전히 같은 방향으로 정렬된 상태는 아닙니다. 다음 흐름에서 VWAP 유지 여부와 종가 회복 여부를 함께 확인해야 합니다.",
+    "종가가 당일 저가권에 가까워 장 마감 기준 매도 압력이 우세할 수 있습니다.":
+      "종가가 당일 저가권에 가깝다는 것은 장 초반이나 장중에 반등이 있었더라도 마감으로 갈수록 매도세가 우세했을 가능성이 크다는 의미입니다. 특히 저가 부근에서 마감한 날은 다음 거래일 초반에도 투자 심리가 약하게 이어질 수 있어 시초가와 초반 회복 여부를 확인해야 합니다.",
+    "전일 대비 하락폭이 커 단기 가격 약화 가능성이 있습니다.":
+      "전일 대비 가격 하락폭이 크다는 것은 단기적으로 매도 압력이 강하게 발생했을 가능성을 의미합니다. 단순한 하루 조정인지, 기존 추세가 약해지는 신호인지는 하락 당시 거래량, VWAP 이탈 여부, 종가 위치를 함께 봐야 판단할 수 있습니다.",
+    "가격이 VWAP 아래에 있어 매도 압력 또는 평균 단가 하회 상태를 점검해야 합니다.":
+      "가격이 VWAP 아래에 있다는 것은 현재 가격이 당일 평균 거래 단가보다 낮은 위치에 있다는 뜻입니다. 이는 당일 매수자들의 평균 수익 구간이 약해졌다는 의미일 수 있으며, VWAP를 회복하지 못하면 단기 매도 압력이 계속 남아 있을 가능성이 있습니다.",
+  };
+
+  if (detailMap[message]) return detailMap[message];
+  if (message.includes("종가")) {
+    return `종가 관련 신호입니다. 무엇이 발생했는지 보면 ${message} 다음 흐름에서는 종가가 고가권으로 회복되는지, 또는 저가권 흐름이 이어지는지를 함께 확인해야 합니다.`;
+  }
+  if (message.includes("VWAP")) {
+    return `VWAP 관련 신호입니다. ${message} 가격이 평균 거래 단가 위에서 유지되는지, 회복 후 다시 이탈하지 않는지를 확인해야 단기 신뢰도를 판단할 수 있습니다.`;
+  }
+  if (message.includes("거래량")) {
+    return `거래량 관련 신호입니다. ${message} 거래량 증가가 가격 회복과 함께 나타나는지, 아니면 약한 종가와 함께 나타나는지를 구분해 확인해야 합니다.`;
+  }
+  if (message.includes("변동")) {
+    return `변동성 관련 신호입니다. ${message} 장중 흔들림 이후 종가가 어디에 남았는지와 다음 거래일 변동폭이 줄어드는지를 확인해야 합니다.`;
+  }
+  if (message.includes("추세")) {
+    return `추세 관련 신호입니다. ${message} 주요 가격선과 VWAP를 회복하는지, 약한 종가가 반복되는지를 확인해야 합니다.`;
+  }
+
+  return `${message} 이 신호는 단독으로 판단하기보다 가격 위치, 거래량 변화, VWAP 회복 여부, 다음 종가 흐름을 함께 확인해야 합니다.`;
 }
 
 function formatNumber(value: number | undefined): string {
@@ -1047,20 +1401,33 @@ function getDataBasisLabel(result: StockAnalysisViewResult): string {
   return isDailyEodResult(result) ? "데이터 기준일" : "데이터 기준";
 }
 
-function getDataBasisType(result: StockAnalysisViewResult): string {
+function getDataBasisType(result: StockAnalysisViewResult, freshness?: StockDataFreshness): string {
+  if (freshness?.mode === "INTRADAY") return "장중 현재가 기준";
+  if (freshness?.mode === "SAMPLE") return "샘플 데이터 기준";
+  if (freshness?.mode === "FALLBACK") return "대체 데이터 기준";
   return isDailyEodResult(result) ? "일봉 차트 기준" : "차트 기준";
 }
 
-function formatDataBasis(result: StockAnalysisViewResult): string {
+function formatDataBasis(result: StockAnalysisViewResult, freshness?: StockDataFreshness): string {
+  if (freshness?.baseDate && freshness.mode !== "INTRADAY") return formatDateOnly(freshness.baseDate);
+  if (freshness?.baseDateTime && freshness.mode === "INTRADAY") return formatDateTime(freshness.baseDateTime);
   if (isDailyEodResult(result)) return formatDateOnly(result.normalized?.asOf);
   return formatDateTime(result.normalized?.asOf);
 }
 
-function getDataModeNotice(mode: AnalysisMeta["mode"], warning: string): string {
-  if (mode === "real-data") return "실제 시세 데이터 기반 분석 결과입니다.";
-  if (mode === "sample-fallback") {
-    return warning || "실제 시세 데이터를 가져오지 못해 샘플 데이터로 대체했습니다.";
-  }
+function getDataModeNotice(freshness: StockDataFreshness | undefined, warning: string): string {
+  if (warning) return warning;
+  if (freshness?.mode === "EOD") return "일봉 차트 데이터 기반 분석 결과입니다.";
+  if (freshness?.mode === "INTRADAY") return "장중 현재가 기준 분석 결과입니다.";
+  if (freshness?.mode === "FALLBACK") return "대체 데이터 기준 분석 결과입니다.";
 
   return "현재는 샘플 데이터 기반 분석 결과입니다. 실제 종목 데이터 연결은 다음 단계에서 적용됩니다.";
+}
+
+function getDataModeLabel(mode: StockDataFreshness["mode"] | undefined): string {
+  if (mode === "EOD") return "일봉 기준";
+  if (mode === "INTRADAY") return "장중 현재가 기준";
+  if (mode === "SAMPLE") return "샘플 데이터 기준";
+  if (mode === "FALLBACK") return "대체 데이터 기준";
+  return "확인 필요";
 }
