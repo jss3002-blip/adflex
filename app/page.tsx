@@ -122,6 +122,91 @@ type StockAnalysisApiResponse = {
   detail?: string;
 };
 
+const gradeLabels: Record<string, string> = {
+  EXCELLENT_STRUCTURE: "매우 양호한 구조",
+  GOOD_STRUCTURE: "양호한 구조",
+  NEUTRAL_STRUCTURE: "중립 구조",
+  CAUTION_STRUCTURE: "주의 필요 구조",
+  HIGH_RISK_STRUCTURE: "고위험 구조",
+  UNCLEAR_STRUCTURE: "방향성 불명확",
+};
+
+const stateLabels: Record<string, string> = {
+  STRONG_UPTREND: "강한 상승 흐름",
+  BREAKOUT_ATTEMPT: "돌파 시도 구간",
+  TRUE_BREAKOUT_CANDIDATE: "진성 돌파 후보",
+  FALSE_BREAKOUT_RISK: "가짜 돌파 위험",
+  SHORT_TERM_OVERHEATED: "단기 과열 구간",
+  VWAP_SUPPORT_HOLDING: "VWAP 지지 확인 구간",
+  VWAP_BREAKDOWN_WARNING: "VWAP 이탈 주의 구간",
+  PULLBACK_SETUP: "건전한 조정 후보",
+  BOTTOM_REBOUND_ATTEMPT: "저점 반등 시도",
+  TREND_COLLAPSE_RISK: "추세 붕괴 위험",
+  WEAK_PARTICIPATION: "거래 참여 약화",
+  SIDEWAYS_NEUTRAL: "횡보 중립 구간",
+  HIGH_RISK_MOMENTUM: "고위험 모멘텀",
+  WATCHLIST: "관심 관찰 구간",
+};
+
+const actionLabels: Record<string, string> = {
+  WATCH_ONLY: "관찰 전용",
+  WAIT_CONFIRMATION: "추가 확인 필요",
+  BREAKOUT_MONITOR: "돌파 흐름 관찰",
+  TRUE_BREAKOUT_MONITOR: "진성 돌파 후보 관찰",
+  PULLBACK_MONITOR: "조정 구간 관찰",
+  VWAP_SUPPORT_MONITOR: "VWAP 지지 여부 관찰",
+  VWAP_BREAKDOWN_CHECK: "VWAP 이탈 점검",
+  OVERHEAT_CAUTION: "단기 과열 주의",
+  FALSE_BREAKOUT_CAUTION: "가짜 돌파 주의",
+  HIGH_RISK_MOMENTUM_CAUTION: "고위험 모멘텀 주의",
+  TREND_COLLAPSE_CHECK: "추세 훼손 점검",
+  WEAK_PARTICIPATION_CHECK: "거래 참여 약화 점검",
+  RISK_CHECK_REQUIRED: "리스크 우선 점검",
+  NO_CLEAR_EDGE: "명확한 우위 없음",
+};
+
+const urgencyLabels: Record<string, string> = {
+  LOW: "낮음",
+  NORMAL: "보통",
+  ELEVATED: "주의",
+  HIGH: "높음",
+};
+
+function getGradeLabel(grade: string | undefined): string {
+  if (!grade) return "분석 등급 확인 필요";
+  return gradeLabels[grade] || grade;
+}
+
+function getStateLabel(state: string | undefined): string {
+  if (!state) return "상태 확인 필요";
+  return stateLabels[state] || state;
+}
+
+function getActionLabel(action: string | undefined): string {
+  if (!action) return "대응 라벨 확인 필요";
+  return actionLabels[action] || action;
+}
+
+function getUrgencyLabel(urgency: string | undefined): string {
+  if (!urgency) return "확인 필요";
+  return urgencyLabels[urgency] || urgency;
+}
+
+function formatSummaryForDisplay(summary: string | undefined): string {
+  if (!summary) return "";
+
+  const replacements = {
+    ...gradeLabels,
+    ...stateLabels,
+    ...actionLabels,
+    ...urgencyLabels,
+  };
+
+  return Object.entries(replacements).reduce((formatted, [code, label]) => {
+    return formatted.split(code).join(label);
+  }, summary);
+}
+
 export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<StockAnalysisViewResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -480,6 +565,10 @@ export default function Home() {
 }
 
 function AnalysisResultCard({ result }: { result: StockAnalysisViewResult }) {
+  const gradeLabel = getGradeLabel(result.finalGrade);
+  const stateLabel = getStateLabel(result.state.primaryState);
+  const actionLabel = getActionLabel(result.action.actionCode);
+  const urgencyLabel = getUrgencyLabel(result.action.urgencyLevel);
   const scoreItems = [
     { label: "종합 점수", value: formatScore(result.finalScore), accent: "text-cyan-200" },
     { label: "상태 점수", value: formatScore(result.state.stateScore), accent: "text-violet-200" },
@@ -492,10 +581,11 @@ function AnalysisResultCard({ result }: { result: StockAnalysisViewResult }) {
       <div className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-cyan-200/80">분석 결과</p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight">{result.finalGrade}</h2>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight">{gradeLabel}</h2>
+          <p className="mt-1 break-all text-[10px] text-white/35">{result.finalGrade}</p>
         </div>
         <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100/80">
-          {result.action.urgencyLevel}
+          {urgencyLabel}
         </span>
       </div>
 
@@ -509,41 +599,59 @@ function AnalysisResultCard({ result }: { result: StockAnalysisViewResult }) {
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <InfoPill label="상태 분류" value={result.state.primaryState} />
-        <InfoPill label="대응 라벨" value={result.action.actionCode} />
+        <InfoPill label="상태 분류" value={stateLabel} rawValue={result.state.primaryState} />
+        <InfoPill label="대응 라벨" value={actionLabel} rawValue={result.action.actionCode} />
         <InfoPill label="대응 점수" value={formatScore(result.action.actionScore)} />
         <InfoPill label="확인 필요" value={`${result.warnings.length}건`} />
       </div>
 
       <p className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-7 text-white/66">
-        {result.summary}
+        {formatSummaryForDisplay(result.summary)}
       </p>
 
-      {result.warnings.length > 0 ? (
-        <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4">
-          <p className="text-sm font-semibold text-amber-100">확인 필요</p>
+      <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4">
+        <p className="text-sm font-semibold text-amber-100">확인 필요</p>
+        {result.warnings.length > 0 ? (
           <ul className="mt-3 space-y-2 text-xs leading-6 text-amber-50/75">
             {result.warnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
           </ul>
-        </div>
-      ) : null}
+        ) : (
+          <p className="mt-3 text-xs leading-6 text-amber-50/65">현재 표시된 주요 경고는 없습니다.</p>
+        )}
+      </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <EvidenceList title="긍정 지표" items={result.evidence.positive} tone="cyan" />
-        <EvidenceList title="중립 지표" items={result.evidence.neutral} tone="violet" />
-        <EvidenceList title="주의 지표" items={result.evidence.negative} tone="rose" />
+        <EvidenceList
+          title="긍정 지표"
+          items={result.evidence.positive}
+          tone="cyan"
+          emptyMessage="현재 뚜렷한 긍정 지표는 추가 확인이 필요합니다."
+        />
+        <EvidenceList
+          title="중립 지표"
+          items={result.evidence.neutral}
+          tone="violet"
+          emptyMessage="현재 중립 지표는 별도로 표시되지 않았습니다."
+        />
+        <EvidenceList
+          title="주의 지표"
+          items={result.evidence.negative}
+          tone="rose"
+          emptyMessage="현재 강한 주의 신호는 감지되지 않았습니다."
+        />
       </div>
     </div>
   );
 }
 
-function InfoPill({ label, value }: { label: string; value: string }) {
+function InfoPill({ label, value, rawValue }: { label: string; value: string; rawValue?: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
       <p className="text-xs text-white/42">{label}</p>
       <p className="mt-2 break-all text-sm font-semibold text-white/82">{value}</p>
+      {rawValue ? <p className="mt-1 break-all text-[10px] text-white/35">{rawValue}</p> : null}
     </div>
   );
 }
@@ -552,10 +660,12 @@ function EvidenceList({
   title,
   items,
   tone,
+  emptyMessage,
 }: {
   title: string;
   items: string[];
   tone: "cyan" | "violet" | "rose";
+  emptyMessage: string;
 }) {
   const toneClass =
     tone === "cyan" ? "text-cyan-100 border-cyan-300/15 bg-cyan-300/[0.05]" : tone === "violet" ? "text-violet-100 border-violet-300/15 bg-violet-300/[0.05]" : "text-rose-100 border-rose-300/15 bg-rose-300/[0.05]";
@@ -570,7 +680,7 @@ function EvidenceList({
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-xs text-white/45">표시할 항목이 없습니다.</p>
+        <p className="mt-3 text-xs leading-6 text-white/45">{emptyMessage}</p>
       )}
     </div>
   );
