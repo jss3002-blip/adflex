@@ -811,10 +811,14 @@ function AnalysisResultCard({
         </div>
       </div>
 
+      <ReasoningSection result={result} />
+
       <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
         <p className="text-xs font-semibold text-cyan-200/80">현재 이 종목을 한 문장으로 해석하면</p>
         <p className="mt-2 text-sm leading-7 text-white/72">{buildOneLineInterpretation(result)}</p>
       </div>
+
+      <CustomerTakeawaySection result={result} />
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.055] p-4 text-sm leading-7 text-cyan-50/78 sm:col-span-2">
@@ -1022,6 +1026,42 @@ function DetailedAnalysisSection({
   );
 }
 
+function ReasoningSection({ result }: { result: StockAnalysisViewResult }) {
+  const reasons = buildStateReasoning(result);
+
+  return (
+    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+      <p className="text-sm font-semibold text-cyan-200/80">왜 이 상태로 분류됐나요?</p>
+      <ul className="mt-3 space-y-2 text-xs leading-6 text-white/68">
+        {reasons.map((reason) => (
+          <li key={reason} className="rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2">
+            {reason}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-xs leading-6 text-white/50">{buildCrossScoreInterpretation(result)}</p>
+    </div>
+  );
+}
+
+function CustomerTakeawaySection({ result }: { result: StockAnalysisViewResult }) {
+  const points = buildCustomerTakeaways(result);
+
+  return (
+    <div className="mt-4 rounded-2xl border border-violet-300/15 bg-violet-300/[0.045] p-4">
+      <p className="text-sm font-semibold text-violet-100">고객이 먼저 봐야 할 핵심 포인트</p>
+      <div className="mt-3 grid gap-3 lg:grid-cols-3">
+        {points.map((point) => (
+          <div key={point.label} className="rounded-2xl border border-white/10 bg-black/18 p-3">
+            <p className="text-[11px] font-semibold text-violet-100/80">{point.label}</p>
+            <p className="mt-2 text-xs leading-6 text-white/68">{point.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ActionPriorityCard({ score }: { score: number }) {
   const safeScore = clampUiScore(score);
   const label = getActionPriorityLabel(safeScore);
@@ -1058,25 +1098,25 @@ function ConfirmationItemsCard({
   result: StockAnalysisViewResult;
   compact?: boolean;
 }) {
-  const confirmationItems = uniqueDetailedIndicatorMessages(items);
+  const confirmationCards = buildIndicatorCards(items, result, "확인 필요", "confirmation");
 
   return (
     <div className="rounded-2xl border border-rose-300/15 bg-rose-300/[0.055] p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-rose-50">확인 필요 항목</p>
-          <p className="mt-1 text-xs text-rose-50/55">총 {confirmationItems.length}개</p>
+          <p className="mt-1 text-xs text-rose-50/55">총 {confirmationCards.length}개</p>
         </div>
         <span className="rounded-full bg-rose-300/15 px-2.5 py-1 text-[11px] font-semibold text-rose-100">
           점검
         </span>
       </div>
-      {confirmationItems.length > 0 ? (
+      {confirmationCards.length > 0 ? (
         <ol className={`mt-4 grid gap-3 text-xs leading-6 text-white/72 ${compact ? "max-h-96 overflow-y-auto pr-1" : ""}`}>
-          {confirmationItems.map((message, index) => (
+          {confirmationCards.map((insight, index) => (
             <InsightCard
-              key={message}
-              insight={getIndicatorInsight(message, result, index, "확인 필요")}
+              key={`${insight.badge}-${insight.title}`}
+              insight={insight}
               index={index}
             />
           ))}
@@ -1180,25 +1220,26 @@ function IndicatorList({
   emptyMessage: string;
 }) {
   const toneClass = getIndicatorToneClass(tone);
-  const uniqueItems = uniqueDetailedIndicatorMessages(items);
+  const sectionBadge = getIndicatorSectionBadge(tone, badge);
+  const insightCards = buildIndicatorCards(items, result, sectionBadge, tone);
 
   return (
     <div className={`rounded-2xl border p-4 ${toneClass.box}`}>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold">{title} {uniqueItems.length}개</p>
+          <p className="text-sm font-semibold">{title} {insightCards.length}개</p>
           <p className="mt-1 text-xs leading-5 text-white/52">{getIndicatorSectionSummary(tone)}</p>
         </div>
         <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${toneClass.badge}`}>
-          {getIndicatorSectionBadge(tone, badge)}
+          {sectionBadge}
         </span>
       </div>
-      {uniqueItems.length > 0 ? (
+      {insightCards.length > 0 ? (
         <ul className="mt-4 grid gap-3 text-xs leading-6 text-white/70 xl:grid-cols-2">
-          {uniqueItems.map((item, index) => (
+          {insightCards.map((insight, index) => (
             <InsightCard
-              key={item}
-              insight={getIndicatorInsight(item, result, index, getIndicatorSectionBadge(tone, badge))}
+              key={`${insight.badge}-${insight.title}`}
+              insight={insight}
               index={index}
             />
           ))}
@@ -1389,18 +1430,6 @@ function getActionPriorityDescription(score: number): string {
   return "현재 대응 우선순위는 과도하게 높은 구간은 아닙니다. 다만 가격 위치와 리스크 신호가 바뀌는지 계속 확인해야 합니다.";
 }
 
-function getConfirmationItemTitle(message: string, index: number): string {
-  if (message.includes("VWAP") && message.includes("가짜 강세")) return "VWAP 약세 / 가짜 강세 확인";
-  if (message.includes("변동성") || message.includes("변동폭")) return "장중 변동성 확대 확인";
-  if (message.includes("추세")) return "추세 붕괴 위험 확인";
-  if (message.includes("평균 단가") || message.includes("VWAP를 하회")) return "평균 단가 하회 확인";
-  if (message.includes("종가")) return "종가 위치 약세 확인";
-  if (message.includes("전일 대비")) return "전일 대비 하락폭 확인";
-  if (message.includes("거래량")) return "거래량과 가격 회복 동반 여부 확인";
-  if (message.includes("52주")) return "52주 위치와 단기 흐름 확인";
-  return `추가 확인 항목 ${index + 1}`;
-}
-
 function getScoreDescription(scoreKey: string, score: number, type: "normal" | "risk"): string {
   if (type === "risk") {
     const riskText =
@@ -1473,6 +1502,50 @@ type IndicatorInsight = {
   nextCheck: string;
 };
 
+type IndicatorCategory = "green" | "yellow" | "orange" | "red" | "confirmation";
+
+type SignalType =
+  | "vwap"
+  | "vwapFake"
+  | "trend"
+  | "volatility"
+  | "close"
+  | "volume"
+  | "week52"
+  | "positive"
+  | "neutral"
+  | "generic";
+
+function buildIndicatorCards(
+  items: string[],
+  result: StockAnalysisViewResult,
+  badge: string,
+  category: IndicatorCategory,
+): IndicatorInsight[] {
+  const cards = items
+    .filter(Boolean)
+    .map((item, index) => getIndicatorInsight(item, result, index, badge, category));
+  const cardMap = new Map<string, IndicatorInsight>();
+
+  for (const card of cards) {
+    const key = `${category}-${card.title}`;
+    const existing = cardMap.get(key);
+
+    if (!existing || getPriorityRank(card.priority) > getPriorityRank(existing.priority)) {
+      cardMap.set(key, card);
+    }
+  }
+
+  return Array.from(cardMap.values());
+}
+
+function getPriorityRank(priority: string | undefined): number {
+  if (priority === "최우선 확인") return 3;
+  if (priority === "중요 확인") return 2;
+  if (priority === "보조 확인") return 1;
+  return 0;
+}
+
 function getIndicatorSectionSummary(tone: "green" | "yellow" | "orange" | "red"): string {
   if (tone === "green") {
     return "현재 완전한 강세 신호는 아니지만, 일부 방어 또는 회복 가능성 신호가 남아 있습니다.";
@@ -1499,80 +1572,82 @@ function getIndicatorInsight(
   result: StockAnalysisViewResult,
   index: number,
   badge: string,
+  category: IndicatorCategory,
 ): IndicatorInsight {
   const detail = getIndicatorDetailMessage(message);
-  const title = getConfirmationItemTitle(detail, index);
-  const priority = badge === "확인 필요" ? getConfirmationPriority(detail, result) : undefined;
+  const signalType = getSignalType(message, detail, category);
+  const title = getIndicatorTitle(signalType, category, result);
+  const priority = category === "confirmation" || category === "red" ? getConfirmationPriority(signalType, detail, result) : undefined;
 
-  if (isVwapMessage(detail)) {
+  if (signalType === "vwap" || signalType === "vwapFake") {
     return {
       title,
       badge,
       priority,
-      meaning: "가격이 평균 거래 단가 기준에서 약한 위치에 있거나, 반등 신뢰도를 확인해야 하는 상태입니다.",
+      meaning: `가격이 평균 거래 단가 아래에 있어 단기 반등 신뢰도가 낮아질 수 있는 상태입니다. 현재 VWAP 이격률은 ${formatPercent(result.vwap.vwapDistancePercent)}입니다.`,
       evidence: `VWAP 점수 ${formatScore(result.vwap.vwapScore)}점, VWAP 리스크 점수 ${formatScore(result.vwap.vwapRiskScore)}점 기준으로 평균 단가 회복 여부가 핵심 확인 기준입니다.`,
       nextCheck: "다음 거래일 가격이 VWAP 위로 회복한 뒤 종가까지 유지되는지 확인해야 합니다.",
     };
   }
 
-  if (detail.includes("추세")) {
+  if (signalType === "trend") {
     return {
       title,
       badge,
       priority,
       meaning: "현재 흐름이 단순 조정이 아니라 추세 약화로 이어질 가능성을 점검해야 합니다.",
-      evidence: `추세 붕괴 위험 ${formatScore(result.risk.trendCollapseRiskScore)}점 기준으로 주요 기준선 회복 실패 가능성을 확인합니다.`,
-      nextCheck: "약한 종가가 반복되는지, VWAP와 주요 가격선을 회복하는지 확인해야 합니다.",
+      evidence: `추세 붕괴 위험 ${formatScore(result.risk.trendCollapseRiskScore)}점이며, 종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점이 함께 약하면 주요 기준선 회복 실패 가능성이 커집니다.`,
+      nextCheck: "VWAP와 주요 가격선을 회복하는지, 약한 종가가 반복되는지 확인해야 합니다.",
     };
   }
 
-  if (detail.includes("변동")) {
+  if (signalType === "volatility") {
     return {
       title,
       badge,
       priority,
       meaning: "장중 흔들림이 커져 가격 신호의 안정성이 낮아진 상태입니다.",
-      evidence: `변동성 위험 ${formatScore(result.risk.volatilityRiskScore)}점 기준으로 고점 돌파보다 종가 위치가 더 중요합니다.`,
+      evidence: `변동성 위험 ${formatScore(result.risk.volatilityRiskScore)}점, 장중 변동폭 ${formatPercent(result.ohlc.intradayRangePercent)} 기준으로 가격 신호가 흔들릴 수 있습니다.`,
       nextCheck: "다음 거래일 변동폭이 줄어들고 종가가 중상단 이상에 남는지 확인해야 합니다.",
     };
   }
 
-  if (detail.includes("종가")) {
+  if (signalType === "close") {
     return {
       title,
       badge,
       priority,
       meaning: "장 마감으로 갈수록 매도 압력이 우세했을 가능성을 확인해야 하는 상태입니다.",
-      evidence: `종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점 기준으로 마감 기준 수급 강도를 확인합니다.`,
+      evidence: `종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점 기준으로 마감 기준 가격 방어력이 낮았는지 확인합니다.`,
       nextCheck: "다음 거래일 시초가와 초반 회복 여부, 그리고 종가가 저가권을 벗어나는지 확인해야 합니다.",
     };
   }
 
-  if (detail.includes("거래량")) {
+  if (signalType === "volume") {
     return {
       title,
       badge,
       priority,
-      meaning: "거래량은 유지되지만 가격 회복이 약하면 우위 흐름으로 보기 어렵습니다.",
-      evidence: `거래량 점수 ${formatScore(result.volume.volumeScore)}점, 거래량 리스크 점수 ${formatScore(result.volume.volumeRiskScore)}점 기준으로 가격 회복 동반 여부가 필요합니다.`,
+      meaning: "거래량은 유지되고 있지만 가격 회복이 약하면 우위 흐름으로 보기 어렵습니다.",
+      evidence: `거래량 점수 ${formatScore(result.volume.volumeScore)}점, 20일 평균 대비 거래량 ${formatPercent(result.volume.volumeRatio20d)} 기준으로 관심은 유지되지만, 가격 회복과 VWAP 회복이 함께 확인되어야 합니다.`,
       nextCheck: "거래량 증가가 종가 회복과 VWAP 회복을 함께 동반하는지 확인해야 합니다.",
     };
   }
 
-  if (detail.includes("52주")) {
+  if (signalType === "week52") {
     return {
       title,
       badge,
       priority,
       meaning: "장기 위치가 양호해도 단기 흐름이 약하면 고점 부담이 생길 수 있습니다.",
-      evidence: `52주 위치 점수 ${formatScore(result.ohlc.week52PositionScore)}점 기준으로 장기 가격 위치와 단기 흐름을 함께 봐야 합니다.`,
+      evidence: `52주 위치 점수 ${formatScore(result.ohlc.week52PositionScore)}점, VWAP 점수 ${formatScore(result.vwap.vwapScore)}점, 종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점 기준으로 장기 위치와 단기 흐름이 충돌하는지 확인합니다.`,
       nextCheck: "고점권에서 가격이 버티는지, 아니면 저가권으로 밀리는지 확인해야 합니다.",
     };
   }
 
-  if (badge === "제한적 긍정") {
+  if (signalType === "positive") {
     return {
-      title: title === `추가 확인 항목 ${index + 1}` ? "제한적 방어 신호 확인" : title,
+      title,
       badge,
       priority,
       meaning: "이 항목은 직접적인 강세 신호가 아니라, 현재 구조가 즉시 붕괴된 상태는 아니라는 제한적 긍정 신호입니다.",
@@ -1585,9 +1660,9 @@ function getIndicatorInsight(
     title,
     badge,
     priority,
-    meaning: detail,
-    evidence: "현재 점수 조합에서 여러 지표가 완전히 같은 방향으로 정렬되지 않아 추가 확인이 필요합니다.",
-    nextCheck: "가격 위치, 거래량 변화, VWAP 회복 여부 중 어떤 조건이 먼저 개선되는지 확인해야 합니다.",
+    meaning: category === "yellow" ? "현재 지표가 한 방향으로 완전히 정렬되지 않아 판단을 보류해야 하는 상태입니다." : "현재 리스크 조건을 추가로 확인해야 하는 상태입니다.",
+    evidence: detail,
+    nextCheck: "가장 약한 지표가 먼저 개선되는지 확인하고, 다음 종가 흐름이 현재 해석을 강화하는지 점검해야 합니다.",
   };
 }
 
@@ -1595,18 +1670,55 @@ function isVwapMessage(message: string): boolean {
   return message.includes("VWAP") || message.includes("평균 거래 단가") || message.includes("평균 단가");
 }
 
-function getConfirmationPriority(message: string, result: StockAnalysisViewResult): string {
+function getSignalType(message: string, detail: string, category: IndicatorCategory): SignalType {
+  const text = `${message} ${detail}`;
+
+  if (category === "green") return "positive";
+  if (isVwapMessage(text) && text.includes("가짜 강세")) return "vwapFake";
+  if (isVwapMessage(text)) return "vwap";
+  if (text.includes("추세 붕괴") || text.includes("추세 훼손") || text.includes("추세 약화")) return "trend";
+  if (text.includes("변동성") || text.includes("장중 변동") || text.includes("변동폭")) return "volatility";
+  if (text.includes("종가") || text.includes("저가권")) return "close";
+  if (text.includes("전일 대비") || text.includes("하락폭")) return "close";
+  if (text.includes("거래량")) return "volume";
+  if (text.includes("52주")) return "week52";
+  if (category === "yellow") return "neutral";
+  return "generic";
+}
+
+function getIndicatorTitle(
+  signalType: SignalType,
+  category: IndicatorCategory,
+  result: StockAnalysisViewResult,
+): string {
+  if (category === "green") {
+    if (result.risk.riskScore < 60) return "종합 리스크 과도 구간 아님";
+    if (result.volume.volumeScore >= 45) return "거래 참여 완전 약화 아님";
+    return "회복 가능성 일부 존재";
+  }
+
+  if (signalType === "vwapFake") return "VWAP 약세 / 가짜 강세 확인";
+  if (signalType === "vwap") return "VWAP 회복 여부 확인";
+  if (signalType === "trend") return "추세 훼손 반복 여부 확인";
+  if (signalType === "volatility") return "장중 변동성 확대 확인";
+  if (signalType === "close") return "종가 저가권 마감 확인";
+  if (signalType === "volume") return "거래량과 가격 회복 동반 여부 확인";
+  if (signalType === "week52") return "52주 위치와 단기 흐름 충돌 확인";
+  if (signalType === "neutral") return "혼재 신호 추가 확인";
+  return "리스크 조건 추가 확인";
+}
+
+function getConfirmationPriority(signalType: SignalType, message: string, result: StockAnalysisViewResult): string {
   if (
-    (isVwapMessage(message) && result.vwap.vwapRiskScore >= 70) ||
-    (message.includes("추세") && result.risk.trendCollapseRiskScore >= 80)
+    ((signalType === "vwap" || signalType === "vwapFake") && result.vwap.vwapRiskScore >= 70) ||
+    (signalType === "trend" && result.risk.trendCollapseRiskScore >= 80)
   ) {
     return "최우선 확인";
   }
 
   if (
-    message.includes("변동") ||
-    message.includes("종가") ||
-    message.includes("전일 대비") ||
+    signalType === "volatility" ||
+    signalType === "close" ||
     result.risk.volatilityRiskScore >= 70 ||
     result.ohlc.closePositionScore <= 20
   ) {
@@ -1617,19 +1729,100 @@ function getConfirmationPriority(message: string, result: StockAnalysisViewResul
 }
 
 function buildOneLineInterpretation(result: StockAnalysisViewResult): string {
+  const positive = getStrongestPositiveFactor(result);
+  const negative = getStrongestRiskFactor(result);
+
   if (result.risk.vwapBreakdownRiskScore >= 70 && result.risk.trendCollapseRiskScore >= 80) {
-    return "현재 종목은 VWAP 약세와 추세 붕괴 위험이 동시에 높아 단기 신뢰도가 낮은 상태입니다.";
+    return `현재 종목은 ${positive}은 일부 유지되고 있으나, ${negative}이 동시에 강해 단기 신뢰도는 낮은 상태입니다.`;
   }
   if (result.ohlc.closePositionScore <= 20) {
-    return "종가가 저가권에 가까워 장 마감 기준으로 매도 압력이 우세했을 가능성이 있습니다.";
+    return `현재 종목은 ${positive}은 남아 있지만, 종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점으로 장 마감 기준 매도 압력이 우세했을 가능성이 있습니다.`;
   }
   if (result.volume.volumeScore >= 50 && result.risk.riskScore < 60) {
-    return "거래량 관심은 유지되고 있으며 전체 리스크는 아직 통제 가능한 범위입니다.";
+    return `거래량 점수 ${formatScore(result.volume.volumeScore)}점으로 관심은 유지되고 있으며, 종합 리스크 점수 ${formatScore(result.risk.riskScore)}점 기준으로 전체 위험은 아직 극단 구간은 아닙니다.`;
   }
   if (result.vwap.vwapRiskScore >= 70 || result.risk.trendCollapseRiskScore >= 70) {
-    return "VWAP와 추세 관련 약세 신호가 있어 단기적으로는 회복 여부를 신중하게 확인해야 하는 상태입니다.";
+    return `현재 종목은 ${positive}은 있으나, ${negative} 때문에 단기적으로는 회복 여부를 신중하게 확인해야 하는 상태입니다.`;
   }
   return "현재 종목은 가격 위치, 거래량, VWAP, 리스크 신호가 혼재되어 다음 흐름 확인이 필요한 상태입니다.";
+}
+
+function buildStateReasoning(result: StockAnalysisViewResult): string[] {
+  const reasons: string[] = [];
+
+  if (result.vwap.vwapScore < 50) {
+    reasons.push(`VWAP 점수 ${formatScore(result.vwap.vwapScore)}점으로 평균 거래 단가 기준 약세입니다.`);
+  }
+  if (result.vwap.vwapRiskScore >= 60) {
+    reasons.push(`VWAP 이탈 위험 ${formatScore(result.vwap.vwapRiskScore)}점으로 평균 단가 회복 실패 위험이 높습니다.`);
+  }
+  if (result.ohlc.closePositionScore <= 40) {
+    reasons.push(`종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점으로 장 마감 기준 매도 압력이 우세했을 가능성이 있습니다.`);
+  }
+  if (result.risk.trendCollapseRiskScore >= 60) {
+    reasons.push(`추세 붕괴 위험 ${formatScore(result.risk.trendCollapseRiskScore)}점으로 주요 가격선 회복 여부를 우선 확인해야 합니다.`);
+  }
+  if (result.risk.volatilityRiskScore >= 60) {
+    reasons.push(`변동성 위험 ${formatScore(result.risk.volatilityRiskScore)}점과 장중 변동폭 ${formatPercent(result.ohlc.intradayRangePercent)} 기준으로 가격 신호의 안정성을 추가 확인해야 합니다.`);
+  }
+
+  if (reasons.length === 0) {
+    reasons.push(`종합 점수 ${formatScore(result.finalScore)}점, 리스크 점수 ${formatScore(result.risk.riskScore)}점 기준으로 여러 조건이 혼재되어 추가 확인이 필요합니다.`);
+  }
+
+  return reasons;
+}
+
+function buildCrossScoreInterpretation(result: StockAnalysisViewResult): string {
+  return `52주 위치 점수는 ${formatScore(result.ohlc.week52PositionScore)}점으로 장기 가격 위치를 참고할 수 있습니다. 하지만 VWAP 점수 ${formatScore(result.vwap.vwapScore)}점, 종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점, 추세 붕괴 위험 ${formatScore(result.risk.trendCollapseRiskScore)}점이 함께 약하게 나타나면 단기적으로는 주의 신호가 더 강하게 해석됩니다.`;
+}
+
+function buildCustomerTakeaways(result: StockAnalysisViewResult): Array<{ label: string; value: string }> {
+  return [
+    {
+      label: "가장 강한 위험 신호",
+      value: `${getStrongestRiskFactor(result)}입니다.`,
+    },
+    {
+      label: "아직 남아 있는 긍정 신호",
+      value: `${getStrongestPositiveFactor(result)}으로 관심이 완전히 꺼진 상태는 아닙니다.`,
+    },
+    {
+      label: "다음 거래일 핵심 확인 조건",
+      value: getNextSessionCheck(result),
+    },
+  ];
+}
+
+function getStrongestRiskFactor(result: StockAnalysisViewResult): string {
+  const risks = [
+    { label: `추세 붕괴 위험 ${formatScore(result.risk.trendCollapseRiskScore)}점`, score: result.risk.trendCollapseRiskScore },
+    { label: `VWAP 이탈 위험 ${formatScore(result.risk.vwapBreakdownRiskScore)}점`, score: result.risk.vwapBreakdownRiskScore },
+    { label: `변동성 위험 ${formatScore(result.risk.volatilityRiskScore)}점`, score: result.risk.volatilityRiskScore },
+    { label: `분배/가짜 돌파 위험 ${formatScore(result.risk.distributionRiskScore)}점`, score: result.risk.distributionRiskScore },
+  ];
+
+  return risks.sort((a, b) => b.score - a.score)[0].label;
+}
+
+function getStrongestPositiveFactor(result: StockAnalysisViewResult): string {
+  const positives = [
+    { label: `52주 위치 점수 ${formatScore(result.ohlc.week52PositionScore)}점`, score: result.ohlc.week52PositionScore },
+    { label: `거래량 점수 ${formatScore(result.volume.volumeScore)}점`, score: result.volume.volumeScore },
+    { label: `종합 리스크 점수 ${formatScore(result.risk.riskScore)}점으로 극단 위험은 아님`, score: 100 - result.risk.riskScore },
+  ];
+
+  return positives.sort((a, b) => b.score - a.score)[0].label;
+}
+
+function getNextSessionCheck(result: StockAnalysisViewResult): string {
+  if (result.vwap.vwapRiskScore >= 60 || result.vwap.vwapScore < 50) {
+    return "VWAP 회복 여부와 종가가 VWAP 위에서 유지되는지 확인해야 합니다.";
+  }
+  if (result.ohlc.closePositionScore <= 40) {
+    return "종가가 저가권을 벗어나 중상단 이상으로 회복되는지 확인해야 합니다.";
+  }
+  return "거래량이 유지되는 상태에서 종가와 VWAP 위치가 함께 개선되는지 확인해야 합니다.";
 }
 
 function getIndicatorDetailMessage(message: string): string {
