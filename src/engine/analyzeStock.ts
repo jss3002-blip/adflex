@@ -12,6 +12,7 @@ import {
 import { getActionCode, type ActionCodeInput, type ActionCodeResult } from "./actionCode";
 import { analyzeSignalConflicts, type SignalConflictResult } from "./scoreConflict";
 import { analyzeFalseSignalRisk, type FalseSignalResult } from "./scoreFalseSignal";
+import { analyzeRiskGateOverlay, type RiskGateOverlayResult } from "./riskGateOverlay";
 
 export type StockAnalysisInput = EngineStockAnalysisInput;
 
@@ -33,6 +34,7 @@ export type StockAnalysisResult = {
   action: ReturnType<typeof getActionCode>;
   conflictAnalysis?: SignalConflictResult;
   falseSignalAnalysis?: FalseSignalResult;
+  riskGateOverlay: RiskGateOverlayResult;
   finalScore: number;
   finalGrade: StockAnalysisGrade;
   summary: string;
@@ -333,6 +335,32 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     lowerWickRatio: ohlc.lowerWickRatio,
     vwapDistancePercent: vwap.vwapDistancePercent,
   });
+  const riskGateOverlay = analyzeRiskGateOverlay({
+    finalScore,
+    totalRiskScore: risk.riskScore,
+    closePositionScore: ohlc.closePositionScore,
+    fiftyTwoWeekPositionScore: ohlc.week52PositionScore,
+    vwapScore: vwap.vwapScore,
+    vwapRiskScore: vwap.vwapRiskScore,
+    vwapBreakdownRisk: risk.vwapBreakdownRiskScore,
+    trendCollapseRisk: risk.trendCollapseRiskScore,
+    volatilityRisk: risk.volatilityRiskScore,
+    volumeScore: volume.volumeScore,
+    volumeRiskScore: volume.volumeRiskScore,
+    distributionRisk: risk.distributionRiskScore,
+    participationWeaknessRisk: risk.lowLiquidityOrWeakParticipationRiskScore,
+    conflictScore: conflictAnalysis.conflictScore,
+    falseSignalScore: falseSignalAnalysis.falseSignalScore,
+    confidenceScore: state.confidenceScore,
+    dailyChangePercent: ohlc.previousCloseChangePercent,
+    intradayRangePercent: ohlc.intradayRangePercent,
+    vwapDistancePercent: vwap.vwapDistancePercent,
+    upperWickRatio: ohlc.upperWickRatio,
+    marketRegime: normalized.marketRegime,
+    stockType: normalized.stockType,
+    dataMode: normalized.analysisMode,
+    isRealtime: normalized.metadata?.isRealtime,
+  });
 
   return {
     normalized,
@@ -344,6 +372,7 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     action,
     conflictAnalysis,
     falseSignalAnalysis,
+    riskGateOverlay,
     finalScore,
     finalGrade,
     summary: generateFinalSummary(finalGrade, finalScore, risk.riskScore, state, action),
