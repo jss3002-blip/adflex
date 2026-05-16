@@ -156,6 +156,33 @@ type StockAnalysisViewResult = {
     neutral: string[];
     negative: string[];
   };
+  conflictAnalysis?: ConflictAnalysisViewResult;
+  falseSignalAnalysis?: FalseSignalAnalysisViewResult;
+};
+
+type QualitySignalLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+type QualitySignalInsight = {
+  severity?: QualitySignalLevel;
+  riskLevel?: QualitySignalLevel;
+  titleKo: string;
+  summaryKo: string;
+  evidenceKo: string;
+  checkPointKo: string;
+};
+
+type ConflictAnalysisViewResult = {
+  conflictScore: number;
+  severity: QualitySignalLevel;
+  conflicts: QualitySignalInsight[];
+  summaryKo: string;
+};
+
+type FalseSignalAnalysisViewResult = {
+  falseSignalScore: number;
+  riskLevel: QualitySignalLevel;
+  signals: QualitySignalInsight[];
+  summaryKo: string;
 };
 
 type YahooProviderDiagnostics = {
@@ -543,7 +570,16 @@ export default function Home() {
         </section>
       ) : null}
 
-      <section className="relative z-10 mx-auto grid w-full max-w-7xl gap-4 px-5 py-8 sm:grid-cols-2 lg:grid-cols-4 lg:px-10">
+      <section className={`relative z-10 mx-auto w-full max-w-7xl px-5 py-6 lg:px-10 ${hasResult ? "" : "hidden"}`}>
+        <details className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-4 backdrop-blur-xl">
+          <summary className="cursor-pointer text-sm font-semibold text-white/72">서비스 기능 미리보기</summary>
+          <p className="mt-2 text-xs leading-6 text-white/45">
+            분석 결과를 확인한 뒤 필요한 경우 서비스 기능과 대시보드 예시를 펼쳐볼 수 있습니다.
+          </p>
+        </details>
+      </section>
+
+      <section className={`relative z-10 mx-auto grid w-full max-w-7xl gap-4 px-5 py-8 sm:grid-cols-2 lg:grid-cols-4 lg:px-10 ${hasResult ? "hidden" : ""}`}>
         {stats.map((stat) => (
           <div
             key={stat.label}
@@ -556,7 +592,7 @@ export default function Home() {
         ))}
       </section>
 
-      <section className="relative z-10 mx-auto w-full max-w-7xl px-5 py-8 lg:px-10">
+      <section className={`relative z-10 mx-auto w-full max-w-7xl px-5 py-8 lg:px-10 ${hasResult ? "hidden" : ""}`}>
         <div className="grid gap-3 rounded-[2rem] border border-white/10 bg-white/[0.035] p-3 backdrop-blur-xl sm:grid-cols-2 lg:grid-cols-5">
           {features.map(({ title, icon }) => (
             <div
@@ -572,7 +608,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="dashboard-preview" className="relative z-10 mx-auto w-full max-w-7xl px-5 py-16 lg:px-10">
+      <section id="dashboard-preview" className={`relative z-10 mx-auto w-full max-w-7xl px-5 py-16 lg:px-10 ${hasResult ? "hidden" : ""}`}>
         <div className="mb-8 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
           <div>
             <p className="text-sm font-semibold text-cyan-200/80">실시간 대시보드 프리뷰</p>
@@ -749,7 +785,7 @@ function AnalysisResultCard({
   const modeNotice = getDataModeNotice(meta.freshness, meta.warning);
   const dataBasisLabel = getDataBasisLabel(result);
   const dataBasisValue = formatDataBasis(result);
-  const displayedWarnings = getDisplayItems(result.warnings, 5);
+  const topConfirmationCards = getTopConfirmationCards(result.warnings, result, 3);
   const scoreItems = [
     { key: "finalScore", title: "종합 점수", score: result.finalScore, type: "normal" as const },
     { key: "stateScore", title: "상태 분류 신뢰도", score: result.state.stateScore, type: "normal" as const },
@@ -807,7 +843,7 @@ function AnalysisResultCard({
         </div>
         <div className="mt-4 grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
           <ActionPriorityCard score={result.action.actionScore} />
-          <ConfirmationItemsCard items={result.warnings} result={result} compact />
+          <ConfirmationItemsCard cards={topConfirmationCards} compact />
         </div>
       </div>
 
@@ -819,6 +855,8 @@ function AnalysisResultCard({
       </div>
 
       <CustomerTakeawaySection result={result} />
+
+      <QualitySignalsSection result={result} />
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.055] p-4 text-sm leading-7 text-cyan-50/78 sm:col-span-2">
@@ -844,17 +882,15 @@ function AnalysisResultCard({
       <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4">
         <p className="text-sm font-semibold text-amber-100">핵심 확인 요약</p>
         {result.warnings.length > 0 ? (
-          <ul className="mt-3 space-y-2 text-xs leading-6 text-amber-50/75">
-            {displayedWarnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
+          <p className="mt-3 text-xs leading-6 text-amber-50/75">
+            {topConfirmationCards.map((card) => card.title).join(" · ")} 조건을 우선 확인하세요.
+          </p>
         ) : (
           <p className="mt-3 text-xs leading-6 text-amber-50/65">현재 표시된 주요 경고는 없습니다.</p>
         )}
       </div>
 
-      <IndicatorSections result={result} />
+      <IndicatorSections result={result} hiddenConfirmationTitles={topConfirmationCards.map((card) => card.title)} />
 
       <DetailedAnalysisSection
         result={result}
@@ -1062,6 +1098,116 @@ function CustomerTakeawaySection({ result }: { result: StockAnalysisViewResult }
   );
 }
 
+function QualitySignalsSection({ result }: { result: StockAnalysisViewResult }) {
+  if (!result.conflictAnalysis && !result.falseSignalAnalysis) return null;
+
+  return (
+    <div className="mt-4 rounded-2xl border border-orange-300/15 bg-orange-300/[0.04] p-4">
+      <div className="mb-4">
+        <p className="text-sm font-semibold text-orange-100">분석 품질 보강 신호</p>
+        <p className="mt-1 text-xs leading-5 text-white/50">
+          이 점수는 종목 전체 위험도가 아니라, 개별 점수만으로는 놓치기 쉬운 신호 충돌과 가짜 강세 가능성을
+          따로 평가한 보조 분석 점수입니다. 종합 리스크 점수와 직접 비교하기보다, 단기 확인 우선순위를 정하는
+          참고 지표로 해석해야 합니다.
+        </p>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <QualitySignalPanel
+          title="신호 충돌 분석"
+          score={result.conflictAnalysis?.conflictScore}
+          level={result.conflictAnalysis?.severity}
+          summary={result.conflictAnalysis?.summaryKo}
+          items={result.conflictAnalysis?.conflicts}
+          emptyMessage="현재 추가적인 신호 충돌은 크게 감지되지 않았습니다."
+        />
+        <QualitySignalPanel
+          title="가짜 신호 위험"
+          score={result.falseSignalAnalysis?.falseSignalScore}
+          level={result.falseSignalAnalysis?.riskLevel}
+          summary={result.falseSignalAnalysis?.summaryKo}
+          items={result.falseSignalAnalysis?.signals}
+          emptyMessage="현재 뚜렷한 가짜 강세 위험은 제한적입니다."
+        />
+      </div>
+    </div>
+  );
+}
+
+function QualitySignalPanel({
+  title,
+  score,
+  level,
+  summary,
+  items,
+  emptyMessage,
+}: {
+  title: string;
+  score: number | undefined;
+  level: QualitySignalLevel | undefined;
+  summary: string | undefined;
+  items: QualitySignalInsight[] | undefined;
+  emptyMessage: string;
+}) {
+  const safeScore = clampUiScore(score || 0);
+  const levelLabel = getQualitySignalLevelLabel(level);
+  const colorClass = getActionPriorityColor(safeScore);
+  const displayItems = (items || []).slice(0, 3);
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-white/86">{title}</p>
+          <p className="mt-2 text-2xl font-semibold text-white">{formatScore(safeScore)}점 / 100점</p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${colorClass.badge}`}>
+          {levelLabel}
+        </span>
+      </div>
+      <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/10">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${colorClass.bar}`}
+          style={{ width: `${safeScore}%` }}
+        />
+      </div>
+      <p className="mt-3 text-xs leading-6 text-white/58">
+        {summary || emptyMessage}
+      </p>
+      {safeScore >= 85 ? (
+        <p className="mt-2 text-[11px] leading-5 text-orange-100/70">
+          보조 분석 기준 매우 높음 상태입니다. 직접적인 매수/매도 판단이 아니라 구조 점검 신호이며, 단기 확인
+          우선순위가 높다는 뜻으로 해석하세요.
+        </p>
+      ) : (
+        <p className="mt-2 text-[11px] leading-5 text-white/42">
+          직접적인 매수/매도 판단이 아니라 구조 점검을 돕는 보조 위험 신호입니다.
+        </p>
+      )}
+      {displayItems.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {displayItems.map((item) => (
+            <div key={item.titleKo} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-white/82">{item.titleKo}</p>
+                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/60">
+                  {getQualitySignalLevelLabel(item.severity || item.riskLevel)}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-white/58">{item.summaryKo}</p>
+              <p className="mt-2 text-[11px] leading-5 text-white/45">{item.evidenceKo}</p>
+              <p className="mt-2 text-[11px] leading-5 text-orange-100/70">{item.checkPointKo}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs leading-6 text-white/50">
+          {emptyMessage}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ActionPriorityCard({ score }: { score: number }) {
   const safeScore = clampUiScore(score);
   const label = getActionPriorityLabel(safeScore);
@@ -1089,31 +1235,21 @@ function ActionPriorityCard({ score }: { score: number }) {
   );
 }
 
-function ConfirmationItemsCard({
-  items,
-  result,
-  compact = false,
-}: {
-  items: string[];
-  result: StockAnalysisViewResult;
-  compact?: boolean;
-}) {
-  const confirmationCards = buildIndicatorCards(items, result, "확인 필요", "confirmation");
-
+function ConfirmationItemsCard({ cards, compact = false }: { cards: IndicatorInsight[]; compact?: boolean }) {
   return (
     <div className="rounded-2xl border border-rose-300/15 bg-rose-300/[0.055] p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-rose-50">확인 필요 항목</p>
-          <p className="mt-1 text-xs text-rose-50/55">총 {confirmationCards.length}개</p>
+          <p className="mt-1 text-xs text-rose-50/55">우선 확인 {cards.length}개</p>
         </div>
         <span className="rounded-full bg-rose-300/15 px-2.5 py-1 text-[11px] font-semibold text-rose-100">
           점검
         </span>
       </div>
-      {confirmationCards.length > 0 ? (
+      {cards.length > 0 ? (
         <ol className={`mt-4 grid gap-3 text-xs leading-6 text-white/72 ${compact ? "max-h-96 overflow-y-auto pr-1" : ""}`}>
-          {confirmationCards.map((insight, index) => (
+          {cards.map((insight, index) => (
             <InsightCard
               key={`${insight.badge}-${insight.title}`}
               insight={insight}
@@ -1165,7 +1301,13 @@ function ScoreCard({
   );
 }
 
-function IndicatorSections({ result }: { result: StockAnalysisViewResult }) {
+function IndicatorSections({
+  result,
+  hiddenConfirmationTitles = [],
+}: {
+  result: StockAnalysisViewResult;
+  hiddenConfirmationTitles?: string[];
+}) {
   return (
     <div className="mt-4 grid gap-3 lg:grid-cols-2">
       <IndicatorList
@@ -1198,6 +1340,7 @@ function IndicatorSections({ result }: { result: StockAnalysisViewResult }) {
         items={result.warnings}
         result={result}
         tone="red"
+        hiddenTitles={hiddenConfirmationTitles}
         emptyMessage="현재 표시된 주요 확인 항목은 없습니다."
       />
     </div>
@@ -1210,6 +1353,7 @@ function IndicatorList({
   items,
   result,
   tone,
+  hiddenTitles = [],
   emptyMessage,
 }: {
   title: string;
@@ -1217,11 +1361,18 @@ function IndicatorList({
   items: string[];
   result: StockAnalysisViewResult;
   tone: "green" | "yellow" | "orange" | "red";
+  hiddenTitles?: string[];
   emptyMessage: string;
 }) {
   const toneClass = getIndicatorToneClass(tone);
   const sectionBadge = getIndicatorSectionBadge(tone, badge);
-  const insightCards = buildIndicatorCards(items, result, sectionBadge, tone);
+  const insightCards = buildIndicatorCards(items, result, sectionBadge, tone).filter(
+    (card) => !hiddenTitles.includes(card.title),
+  );
+
+  if (tone === "red" && insightCards.length === 0) {
+    return null;
+  }
 
   return (
     <div className={`rounded-2xl border p-4 ${toneClass.box}`}>
@@ -1418,6 +1569,14 @@ function getActionPriorityColor(score: number) {
   return { bar: "bg-emerald-400", badge: "bg-emerald-300/15 text-emerald-100" };
 }
 
+function getQualitySignalLevelLabel(level: QualitySignalLevel | undefined): string {
+  if (level === "CRITICAL") return "보조 분석 기준 매우 높음";
+  if (level === "HIGH") return "단기 확인 우선순위 높음";
+  if (level === "MEDIUM") return "보조 위험 신호 보통";
+  if (level === "LOW") return "보조 위험 신호 낮음";
+  return "보조 분석 확인";
+}
+
 function getActionPriorityDescription(score: number): string {
   if (score >= 80) {
     return "대응 우선순위 점수는 현재 종목을 얼마나 우선적으로 점검해야 하는지를 나타내는 점수입니다. 점수가 높을수록 매수 신호가 강하다는 뜻이 아니라, VWAP 이탈, 추세 훼손, 변동성 확대, 약한 종가 위치 같은 조건을 더 신중하게 확인해야 한다는 의미입니다.";
@@ -1496,6 +1655,7 @@ function getIndicatorToneClass(tone: "green" | "yellow" | "orange" | "red") {
 type IndicatorInsight = {
   title: string;
   badge: string;
+  categoryKey: SignalType;
   priority?: string;
   meaning: string;
   evidence: string;
@@ -1537,6 +1697,177 @@ function buildIndicatorCards(
   }
 
   return Array.from(cardMap.values());
+}
+
+function getTopConfirmationCards(
+  items: string[],
+  result: StockAnalysisViewResult,
+  limit: number,
+): IndicatorInsight[] {
+  const cards = buildIndicatorCards(items, result, "확인 필요", "confirmation");
+  const bestByGroup = new Map<string, IndicatorInsight>();
+
+  for (const card of buildScoreBasedConfirmationCandidates(result)) {
+    bestByGroup.set(getConfirmationGroup(card.categoryKey), card);
+  }
+
+  for (const card of cards) {
+    const group = getConfirmationGroup(card.categoryKey);
+    const current = bestByGroup.get(group);
+    if (!current || shouldReplaceConfirmationCard(current, card, result)) {
+      bestByGroup.set(group, card);
+    }
+  }
+
+  const uniqueCards = Array.from(bestByGroup.values()).sort(
+    (a, b) => getConfirmationSortScore(b, result) - getConfirmationSortScore(a, result),
+  );
+  if (uniqueCards.length >= limit) return uniqueCards.slice(0, limit);
+
+  const selected = [...uniqueCards];
+  for (const card of cards) {
+    if (selected.includes(card)) continue;
+    selected.push(card);
+    if (selected.length >= limit) return selected;
+  }
+
+  return selected;
+}
+
+function buildScoreBasedConfirmationCandidates(result: StockAnalysisViewResult): IndicatorInsight[] {
+  const candidates: IndicatorInsight[] = [];
+
+  if (result.risk.trendCollapseRiskScore >= 80) {
+    candidates.push(createConfirmationInsight("trend", result));
+  }
+  if (
+    result.vwap.vwapScore <= 40 ||
+    result.vwap.vwapRiskScore >= 70 ||
+    result.risk.vwapBreakdownRiskScore >= 70
+  ) {
+    candidates.push(createConfirmationInsight("vwap", result));
+  }
+  if (result.ohlc.closePositionScore <= 30) {
+    candidates.push(createConfirmationInsight("close", result));
+  }
+  if (result.risk.volatilityRiskScore >= 70) {
+    candidates.push(createConfirmationInsight("volatility", result));
+  }
+  if (
+    result.volume.volumeScore >= 50 &&
+    (result.ohlc.closePositionScore <= 30 || result.vwap.vwapScore <= 40)
+  ) {
+    candidates.push(createConfirmationInsight("volume", result));
+  }
+
+  return candidates;
+}
+
+function createConfirmationInsight(signalType: SignalType, result: StockAnalysisViewResult): IndicatorInsight {
+  const title = getIndicatorTitle(signalType, "confirmation", result);
+
+  if (signalType === "trend") {
+    return {
+      title,
+      badge: "확인 필요",
+      categoryKey: signalType,
+      priority: getConfirmationPriority(signalType, title, result),
+      meaning: "추세 약화가 일회성인지 반복되는 흐름인지 확인해야 하는 상태입니다.",
+      evidence: `추세 붕괴 위험 ${formatScore(result.risk.trendCollapseRiskScore)}점, 종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점 기준으로 주요 기준선 회복 여부가 중요합니다.`,
+      nextCheck: "다음 거래일 VWAP와 주요 가격선을 회복하는지, 약한 종가가 반복되는지 확인해야 합니다.",
+    };
+  }
+
+  if (signalType === "vwap") {
+    return {
+      title,
+      badge: "확인 필요",
+      categoryKey: signalType,
+      priority: getConfirmationPriority(signalType, title, result),
+      meaning: `가격이 평균 거래 단가 아래에 있어 단기 신뢰도 확인이 필요합니다. 현재 VWAP 이격률은 ${formatPercent(result.vwap.vwapDistancePercent)}입니다.`,
+      evidence: `VWAP 점수 ${formatScore(result.vwap.vwapScore)}점, VWAP 리스크 점수 ${formatScore(result.vwap.vwapRiskScore)}점, VWAP 이탈 위험 ${formatScore(result.risk.vwapBreakdownRiskScore)}점 기준입니다.`,
+      nextCheck: "다음 거래일 가격이 VWAP 위로 회복한 뒤 종가까지 유지되는지 확인해야 합니다.",
+    };
+  }
+
+  if (signalType === "close") {
+    return {
+      title,
+      badge: "확인 필요",
+      categoryKey: signalType,
+      priority: getConfirmationPriority(signalType, title, result),
+      meaning: "장 마감 기준 가격 방어력이 약했는지 확인해야 하는 상태입니다.",
+      evidence: `종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점, 장중 변동폭 ${formatPercent(result.ohlc.intradayRangePercent)} 기준으로 마감 위치를 점검합니다.`,
+      nextCheck: "다음 거래일 종가가 저가권을 벗어나 중상단 이상에서 마감되는지 확인해야 합니다.",
+    };
+  }
+
+  if (signalType === "volatility") {
+    return {
+      title,
+      badge: "확인 필요",
+      categoryKey: signalType,
+      priority: getConfirmationPriority(signalType, title, result),
+      meaning: "장중 흔들림이 커진 뒤 마감 위치까지 약해지는지 확인해야 하는 상태입니다.",
+      evidence: `변동성 위험 ${formatScore(result.risk.volatilityRiskScore)}점, 장중 변동폭 ${formatPercent(result.ohlc.intradayRangePercent)}, 종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점 기준입니다.`,
+      nextCheck: "다음 거래일 변동폭이 줄어들고 종가 위치가 개선되는지 확인해야 합니다.",
+    };
+  }
+
+  return {
+    title,
+    badge: "확인 필요",
+    categoryKey: signalType,
+    priority: getConfirmationPriority(signalType, title, result),
+    meaning: "거래 참여가 가격 회복으로 연결되는지 확인해야 하는 상태입니다.",
+    evidence: `거래량 점수 ${formatScore(result.volume.volumeScore)}점, 20일 평균 대비 거래량 ${formatPercent(result.volume.volumeRatio20d)}, VWAP 점수 ${formatScore(result.vwap.vwapScore)}점 기준입니다.`,
+    nextCheck: "거래량 증가가 종가 회복과 VWAP 회복을 함께 동반하는지 확인해야 합니다.",
+  };
+}
+
+function getConfirmationGroup(signalType: SignalType): string {
+  if (signalType === "vwap" || signalType === "vwapFake") return "vwap";
+  return signalType;
+}
+
+function shouldReplaceConfirmationCard(
+  current: IndicatorInsight,
+  candidate: IndicatorInsight,
+  result: StockAnalysisViewResult,
+): boolean {
+  const currentGroup = getConfirmationGroup(current.categoryKey);
+  const candidateGroup = getConfirmationGroup(candidate.categoryKey);
+
+  if (currentGroup === "vwap" && candidateGroup === "vwap") {
+    if (candidate.categoryKey === "vwap" && current.categoryKey !== "vwap") return true;
+    if (current.categoryKey === "vwap" && candidate.categoryKey !== "vwap") return false;
+  }
+
+  return getConfirmationSortScore(candidate, result) > getConfirmationSortScore(current, result);
+}
+
+function getConfirmationSortScore(card: IndicatorInsight, result: StockAnalysisViewResult): number {
+  let score = getPriorityRank(card.priority) * 100 + getConfirmationOrderWeight(card.categoryKey);
+
+  if (card.categoryKey === "trend") score += result.risk.trendCollapseRiskScore + 30;
+  else if (card.categoryKey === "vwap" || card.categoryKey === "vwapFake") {
+    score += Math.max(result.vwap.vwapRiskScore, result.risk.vwapBreakdownRiskScore) + 20;
+  } else if (card.categoryKey === "close") score += 100 - result.ohlc.closePositionScore + 15;
+  else if (card.categoryKey === "volatility") score += result.risk.volatilityRiskScore + 10;
+  else if (card.categoryKey === "volume") score += result.volume.volumeScore;
+  else score += 10;
+
+  return score;
+}
+
+function getConfirmationOrderWeight(signalType: SignalType): number {
+  const group = getConfirmationGroup(signalType);
+  if (group === "trend") return 50;
+  if (group === "vwap") return 40;
+  if (group === "close") return 30;
+  if (group === "volatility") return 20;
+  if (group === "volume") return 10;
+  return 0;
 }
 
 function getPriorityRank(priority: string | undefined): number {
@@ -1583,6 +1914,7 @@ function getIndicatorInsight(
     return {
       title,
       badge,
+      categoryKey: signalType,
       priority,
       meaning: `가격이 평균 거래 단가 아래에 있어 단기 반등 신뢰도가 낮아질 수 있는 상태입니다. 현재 VWAP 이격률은 ${formatPercent(result.vwap.vwapDistancePercent)}입니다.`,
       evidence: `VWAP 점수 ${formatScore(result.vwap.vwapScore)}점, VWAP 리스크 점수 ${formatScore(result.vwap.vwapRiskScore)}점 기준으로 평균 단가 회복 여부가 핵심 확인 기준입니다.`,
@@ -1594,6 +1926,7 @@ function getIndicatorInsight(
     return {
       title,
       badge,
+      categoryKey: signalType,
       priority,
       meaning: "현재 흐름이 단순 조정이 아니라 추세 약화로 이어질 가능성을 점검해야 합니다.",
       evidence: `추세 붕괴 위험 ${formatScore(result.risk.trendCollapseRiskScore)}점이며, 종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점이 함께 약하면 주요 기준선 회복 실패 가능성이 커집니다.`,
@@ -1605,6 +1938,7 @@ function getIndicatorInsight(
     return {
       title,
       badge,
+      categoryKey: signalType,
       priority,
       meaning: "장중 흔들림이 커져 가격 신호의 안정성이 낮아진 상태입니다.",
       evidence: `변동성 위험 ${formatScore(result.risk.volatilityRiskScore)}점, 장중 변동폭 ${formatPercent(result.ohlc.intradayRangePercent)} 기준으로 가격 신호가 흔들릴 수 있습니다.`,
@@ -1616,6 +1950,7 @@ function getIndicatorInsight(
     return {
       title,
       badge,
+      categoryKey: signalType,
       priority,
       meaning: "장 마감으로 갈수록 매도 압력이 우세했을 가능성을 확인해야 하는 상태입니다.",
       evidence: `종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점 기준으로 마감 기준 가격 방어력이 낮았는지 확인합니다.`,
@@ -1627,6 +1962,7 @@ function getIndicatorInsight(
     return {
       title,
       badge,
+      categoryKey: signalType,
       priority,
       meaning: "거래량은 유지되고 있지만 가격 회복이 약하면 우위 흐름으로 보기 어렵습니다.",
       evidence: `거래량 점수 ${formatScore(result.volume.volumeScore)}점, 20일 평균 대비 거래량 ${formatPercent(result.volume.volumeRatio20d)} 기준으로 관심은 유지되지만, 가격 회복과 VWAP 회복이 함께 확인되어야 합니다.`,
@@ -1638,6 +1974,7 @@ function getIndicatorInsight(
     return {
       title,
       badge,
+      categoryKey: signalType,
       priority,
       meaning: "장기 위치가 양호해도 단기 흐름이 약하면 고점 부담이 생길 수 있습니다.",
       evidence: `52주 위치 점수 ${formatScore(result.ohlc.week52PositionScore)}점, VWAP 점수 ${formatScore(result.vwap.vwapScore)}점, 종가 위치 점수 ${formatScore(result.ohlc.closePositionScore)}점 기준으로 장기 위치와 단기 흐름이 충돌하는지 확인합니다.`,
@@ -1649,6 +1986,7 @@ function getIndicatorInsight(
     return {
       title,
       badge,
+      categoryKey: signalType,
       priority,
       meaning: "이 항목은 직접적인 강세 신호가 아니라, 현재 구조가 즉시 붕괴된 상태는 아니라는 제한적 긍정 신호입니다.",
       evidence: `종합 리스크 점수 ${formatScore(result.risk.riskScore)}점과 현재 상태 분류를 함께 보면 방어 가능성은 남아 있습니다.`,
@@ -1659,6 +1997,7 @@ function getIndicatorInsight(
   return {
     title,
     badge,
+    categoryKey: signalType,
     priority,
     meaning: category === "yellow" ? "현재 지표가 한 방향으로 완전히 정렬되지 않아 판단을 보류해야 하는 상태입니다." : "현재 리스크 조건을 추가로 확인해야 하는 상태입니다.",
     evidence: detail,
@@ -1700,7 +2039,7 @@ function getIndicatorTitle(
   if (signalType === "vwapFake") return "VWAP 약세 / 가짜 강세 확인";
   if (signalType === "vwap") return "VWAP 회복 여부 확인";
   if (signalType === "trend") return "추세 훼손 반복 여부 확인";
-  if (signalType === "volatility") return "장중 변동성 확대 확인";
+  if (signalType === "volatility") return "장중 변동성 확대 후 종가 위치 확인";
   if (signalType === "close") return "종가 저가권 마감 확인";
   if (signalType === "volume") return "거래량과 가격 회복 동반 여부 확인";
   if (signalType === "week52") return "52주 위치와 단기 흐름 충돌 확인";
