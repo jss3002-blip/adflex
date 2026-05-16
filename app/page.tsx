@@ -91,6 +91,10 @@ const sentimentItems = [
 ];
 
 type StockAnalysisViewResult = {
+  normalized?: {
+    ticker?: string;
+    name?: string;
+  };
   finalScore: number;
   finalGrade: string;
   state: {
@@ -117,9 +121,23 @@ type StockAnalysisViewResult = {
 
 type StockAnalysisApiResponse = {
   success: boolean;
+  mode?: "real-data" | "sample-fallback" | "sample";
+  source?: "yahoo-finance" | "sample";
+  warning?: string;
+  stock?: {
+    name: string;
+    code: string;
+    yahooSymbol: string;
+  };
   data?: StockAnalysisViewResult;
   error?: string;
   detail?: string;
+};
+
+type AnalysisMeta = {
+  mode: StockAnalysisApiResponse["mode"];
+  source: StockAnalysisApiResponse["source"];
+  warning: string;
 };
 
 const gradeLabels: Record<string, string> = {
@@ -211,15 +229,29 @@ export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<StockAnalysisViewResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
+  const [stockNameInput, setStockNameInput] = useState("삼성전자");
+  const [analyzedStockName, setAnalyzedStockName] = useState("");
+  const [analysisMeta, setAnalysisMeta] = useState<AnalysisMeta>({
+    mode: undefined,
+    source: undefined,
+    warning: "",
+  });
 
   async function handleAnalyzeStock() {
+    const selectedStockName = stockNameInput.trim() || "삼성전자";
     setIsAnalyzing(true);
     setAnalysisError("");
 
     try {
       const response = await fetch("/api/analyze-stock", {
-        method: "GET",
+        method: "POST",
         cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          stockName: selectedStockName,
+        }),
       });
       const payload = (await response.json()) as StockAnalysisApiResponse;
 
@@ -229,6 +261,12 @@ export default function Home() {
       }
 
       setAnalysisResult(payload.data);
+      setAnalyzedStockName(selectedStockName);
+      setAnalysisMeta({
+        mode: payload.mode,
+        source: payload.source,
+        warning: payload.warning || "",
+      });
     } catch (error) {
       setAnalysisError(error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.");
     } finally {
@@ -300,6 +338,22 @@ export default function Home() {
             </p>
           </div>
 
+          <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-3 shadow-[0_24px_90px_-70px_rgba(34,211,238,0.85)] backdrop-blur-xl">
+            <label htmlFor="stock-name" className="px-1 text-xs font-semibold text-cyan-100/75">
+              분석할 종목명
+            </label>
+            <input
+              id="stock-name"
+              value={stockNameInput}
+              onChange={(event) => setStockNameInput(event.target.value)}
+              placeholder="예: 삼성전자, SK하이닉스, 현대차"
+              className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white outline-none transition placeholder:text-white/35 focus:border-cyan-300/45 focus:bg-black/30"
+            />
+            <p className="mt-2 px-1 text-xs leading-5 text-white/42">
+              현재는 샘플 데이터로 분석 흐름을 확인합니다.
+            </p>
+          </div>
+
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
@@ -326,7 +380,13 @@ export default function Home() {
             </div>
           ) : null}
 
-          {analysisResult ? <AnalysisResultCard result={analysisResult} /> : null}
+          {analysisResult ? (
+            <AnalysisResultCard
+              result={analysisResult}
+              targetStockName={analyzedStockName}
+              meta={analysisMeta}
+            />
+          ) : null}
         </div>
 
         <div className="relative">
@@ -564,11 +624,24 @@ export default function Home() {
   );
 }
 
-function AnalysisResultCard({ result }: { result: StockAnalysisViewResult }) {
+function AnalysisResultCard({
+  result,
+  targetStockName,
+  meta,
+}: {
+  result: StockAnalysisViewResult;
+  targetStockName: string;
+  meta: AnalysisMeta;
+}) {
   const gradeLabel = getGradeLabel(result.finalGrade);
   const stateLabel = getStateLabel(result.state.primaryState);
   const actionLabel = getActionLabel(result.action.actionCode);
   const urgencyLabel = getUrgencyLabel(result.action.urgencyLevel);
+  const displayedStockName = targetStockName || result.normalized?.name || "샘플 종목";
+  const confirmedStockName = result.normalized?.name || "확인 대기";
+  const confirmedTicker = result.normalized?.ticker || "";
+  const sourceLabel = meta.source === "yahoo-finance" ? "Yahoo Finance" : "샘플 데이터";
+  const modeNotice = getDataModeNotice(meta.mode, meta.warning);
   const scoreItems = [
     { label: "종합 점수", value: formatScore(result.finalScore), accent: "text-cyan-200" },
     { label: "상태 점수", value: formatScore(result.state.stateScore), accent: "text-violet-200" },
@@ -587,6 +660,18 @@ function AnalysisResultCard({ result }: { result: StockAnalysisViewResult }) {
         <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100/80">
           {urgencyLabel}
         </span>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+        <p className="text-sm font-semibold text-white/82">분석 대상: {displayedStockName}</p>
+        <p className="mt-2 text-xs leading-6 text-white/55">
+          확인 종목: {confirmedStockName}
+          {confirmedTicker ? ` (${confirmedTicker})` : ""}
+        </p>
+        <p className="text-xs leading-6 text-white/55">데이터 출처: {sourceLabel}</p>
+        <p className="mt-2 text-xs leading-6 text-white/45">
+          {modeNotice}
+        </p>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -688,4 +773,13 @@ function EvidenceList({
 
 function formatScore(value: number) {
   return Number.isFinite(value) ? value.toFixed(0) : "-";
+}
+
+function getDataModeNotice(mode: AnalysisMeta["mode"], warning: string): string {
+  if (mode === "real-data") return "실제 시세 데이터 기반 분석 결과입니다.";
+  if (mode === "sample-fallback") {
+    return warning || "실제 시세 데이터를 가져오지 못해 샘플 데이터로 대체했습니다.";
+  }
+
+  return "현재는 샘플 데이터 기반 분석 결과입니다. 실제 종목 데이터 연결은 다음 단계에서 적용됩니다.";
 }

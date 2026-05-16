@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { analyzeStock } from "@/src/engine/analyzeStock";
 import { sampleStockInput } from "@/src/data/sampleStockInput";
+import { resolveStockSymbol } from "@/src/data/stockSymbolMap";
+import { fetchYahooFinanceStockInput } from "@/src/data/yahooFinanceProvider";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
@@ -15,6 +17,7 @@ export async function GET() {
       {
         success: true,
         mode: "sample",
+        source: "sample",
         data: result,
       },
       { status: 200, headers: JSON_HEADERS },
@@ -27,34 +30,75 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await readJsonBody(req);
-    let input = sampleStockInput;
-    if (hasUsableStockInput(body)) input = body;
-    const result = analyzeStock(input);
+    const stockName = getStockName(body);
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: result,
-      },
-      { status: 200, headers: JSON_HEADERS },
-    );
+    if (!stockName) {
+      const result = analyzeStock(sampleStockInput);
+
+      return NextResponse.json(
+        {
+          success: true,
+          mode: "sample",
+          source: "sample",
+          data: result,
+        },
+        { status: 200, headers: JSON_HEADERS },
+      );
+    }
+
+    const resolvedStock = resolveStockSymbol(stockName);
+
+    if (!resolvedStock) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "지원하지 않는 종목명입니다.",
+          detail: "현재 등록된 종목명 또는 별칭을 입력해 주세요.",
+        },
+        { status: 400, headers: JSON_HEADERS },
+      );
+    }
+
+    try {
+      const realInput = await fetchYahooFinanceStockInput({ stock: resolvedStock });
+      const result = analyzeStock(realInput);
+
+      return NextResponse.json(
+        {
+          success: true,
+          mode: "real-data",
+          source: "yahoo-finance",
+          stock: resolvedStock,
+          data: result,
+        },
+        { status: 200, headers: JSON_HEADERS },
+      );
+    } catch {
+      const result = analyzeStock(sampleStockInput);
+
+      return NextResponse.json(
+        {
+          success: true,
+          mode: "sample-fallback",
+          source: "sample",
+          stock: resolvedStock,
+          warning: "실제 시세 데이터를 가져오지 못해 샘플 데이터로 대체했습니다.",
+          data: result,
+        },
+        { status: 200, headers: JSON_HEADERS },
+      );
+    }
   } catch (error) {
     return createAnalysisErrorResponse(error);
   }
 }
 
-function hasUsableStockInput(value: unknown): value is Parameters<typeof analyzeStock>[0] {
-  if (!value || typeof value !== "object") return false;
+function getStockName(value: unknown): string {
+  if (!value || typeof value !== "object") return "";
 
   const candidate = value as Record<string, unknown>;
-  return (
-    isFiniteNumber(candidate.currentPrice) &&
-    isFiniteNumber(candidate.open) &&
-    isFiniteNumber(candidate.high) &&
-    isFiniteNumber(candidate.low) &&
-    isFiniteNumber(candidate.close) &&
-    isFiniteNumber(candidate.volume)
-  );
+  if (typeof candidate.stockName !== "string") return "";
+  return candidate.stockName.trim();
 }
 
 async function readJsonBody(req: Request): Promise<unknown> {
@@ -80,6 +124,3 @@ function getErrorMessage(error: unknown): string {
   return "Unknown error";
 }
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
