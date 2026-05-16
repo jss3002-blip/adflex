@@ -1,23 +1,222 @@
 {
   "domain": "score-groups",
-  "description": "Defines scalable score group metadata for StockAI rule aggregation.",
+  "schemaVersion": "stockai.rules.scoring.v2",
+  "description": "Defines score groups, engine axes, and time horizon participation.",
   "scoreGroups": {
-    "PriceStateScore": { "description": "Price location, candle quality, and short-term price behavior.", "defaultWeight": 0.08 },
-    "TrendScore": { "description": "Moving average alignment, slope, and trend stability.", "defaultWeight": 0.09 },
-    "VWAPScore": { "description": "VWAP hold, reclaim, and intraday institutional reference behavior.", "defaultWeight": 0.07 },
-    "BreakoutScore": { "description": "Breakout probability, reliability, and failure risk.", "defaultWeight": 0.09 },
-    "VolumeScore": { "description": "Volume expansion, persistence, and exhaustion signals.", "defaultWeight": 0.08 },
-    "IntradayScore": { "description": "Intraday range, reversal, and multi-timeframe alignment.", "defaultWeight": 0.06 },
-    "OrderbookScore": { "description": "Orderbook imbalance, spread, and liquidity quality.", "defaultWeight": 0.05 },
-    "FlowScore": { "description": "Foreign, institution, retail, and capital flow behavior.", "defaultWeight": 0.07 },
-    "ProgramScore": { "description": "Program trading pressure and support.", "defaultWeight": 0.04 },
-    "ShortSellingScore": { "description": "Short interest and squeeze-related signals.", "defaultWeight": 0.04 },
-    "NewsDisclosureScore": { "description": "News impact and disclosure reliability.", "defaultWeight": 0.06 },
-    "FinancialScore": { "description": "Financial health, distress, and earnings surprise.", "defaultWeight": 0.07 },
-    "SectorScore": { "description": "Sector strength, breadth, and rotation.", "defaultWeight": 0.06 },
-    "MacroScore": { "description": "Rates, FX, and macro event risk.", "defaultWeight": 0.05 },
-    "SentimentScore": { "description": "Crowd behavior, FOMO, and narrative fatigue.", "defaultWeight": 0.04 },
-    "RiskScore": { "description": "Downside, liquidity, quality, and listing risk.", "defaultWeight": 0.12 },
-    "ConfidenceScore": { "description": "Data reliability and independent signal confirmation.", "defaultWeight": 0.03 }
+    "PriceStateScore": {
+      "engineAxis": [
+        "OpportunityScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore"
+      ],
+      "defaultWeight": 0.08,
+      "sourceGroup": "price_structure"
+    },
+    "TrendScore": {
+      "engineAxis": [
+        "OpportunityScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore",
+        "MidTermScore",
+        "LongTermScore"
+      ],
+      "defaultWeight": 0.09,
+      "sourceGroup": "trend"
+    },
+    "VWAPScore": {
+      "engineAxis": [
+        "OpportunityScore",
+        "RiskScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore"
+      ],
+      "defaultWeight": 0.07,
+      "sourceGroup": "vwap"
+    },
+    "BreakoutScore": {
+      "engineAxis": [
+        "OpportunityScore",
+        "RiskScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore",
+        "MidTermScore"
+      ],
+      "defaultWeight": 0.09,
+      "sourceGroup": "breakout"
+    },
+    "VolumeScore": {
+      "engineAxis": [
+        "OpportunityScore",
+        "RiskScore",
+        "ConfidenceScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore",
+        "MidTermScore"
+      ],
+      "defaultWeight": 0.08,
+      "sourceGroup": "volume"
+    },
+    "IntradayScore": {
+      "engineAxis": [
+        "OpportunityScore",
+        "RiskScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore"
+      ],
+      "defaultWeight": 0.06,
+      "sourceGroup": "intraday"
+    },
+    "OrderbookScore": {
+      "engineAxis": [
+        "RiskScore",
+        "ConfidenceScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore"
+      ],
+      "defaultWeight": 0.05,
+      "sourceGroup": "orderbook_liquidity"
+    },
+    "FlowScore": {
+      "engineAxis": [
+        "OpportunityScore",
+        "RiskScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore",
+        "MidTermScore",
+        "LongTermScore"
+      ],
+      "defaultWeight": 0.07,
+      "sourceGroup": "flow"
+    },
+    "ProgramScore": {
+      "engineAxis": [
+        "OpportunityScore",
+        "RiskScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore"
+      ],
+      "defaultWeight": 0.04,
+      "sourceGroup": "program"
+    },
+    "ShortSellingScore": {
+      "engineAxis": [
+        "RiskScore",
+        "OpportunityScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore",
+        "MidTermScore"
+      ],
+      "defaultWeight": 0.04,
+      "sourceGroup": "short_selling"
+    },
+    "NewsDisclosureScore": {
+      "engineAxis": [
+        "OpportunityScore",
+        "RiskScore",
+        "ConfidenceScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore",
+        "MidTermScore"
+      ],
+      "defaultWeight": 0.06,
+      "sourceGroup": "news_disclosure"
+    },
+    "FinancialScore": {
+      "engineAxis": [
+        "OpportunityScore",
+        "RiskScore",
+        "ConfidenceScore"
+      ],
+      "timeHorizon": [
+        "MidTermScore",
+        "LongTermScore"
+      ],
+      "defaultWeight": 0.07,
+      "sourceGroup": "financial"
+    },
+    "SectorScore": {
+      "engineAxis": [
+        "OpportunityScore",
+        "ConfidenceScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore",
+        "MidTermScore",
+        "LongTermScore"
+      ],
+      "defaultWeight": 0.06,
+      "sourceGroup": "sector"
+    },
+    "MacroScore": {
+      "engineAxis": [
+        "RiskScore",
+        "OpportunityScore"
+      ],
+      "timeHorizon": [
+        "MidTermScore",
+        "LongTermScore"
+      ],
+      "defaultWeight": 0.05,
+      "sourceGroup": "macro"
+    },
+    "SentimentScore": {
+      "engineAxis": [
+        "OpportunityScore",
+        "RiskScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore"
+      ],
+      "defaultWeight": 0.04,
+      "sourceGroup": "sentiment_narrative"
+    },
+    "SmartMoneyScore": {
+      "engineAxis": [
+        "OpportunityScore",
+        "RiskScore",
+        "ConfidenceScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore",
+        "MidTermScore"
+      ],
+      "defaultWeight": 0.06,
+      "sourceGroup": "smart_money"
+    },
+    "RiskScore": {
+      "engineAxis": [
+        "RiskScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore",
+        "MidTermScore",
+        "LongTermScore"
+      ],
+      "defaultWeight": 0.12,
+      "sourceGroup": "risk"
+    },
+    "ConfidenceScore": {
+      "engineAxis": [
+        "ConfidenceScore"
+      ],
+      "timeHorizon": [
+        "ShortTermScore",
+        "MidTermScore",
+        "LongTermScore"
+      ],
+      "defaultWeight": 0.03,
+      "sourceGroup": "data_quality_backtest"
+    }
   }
 }

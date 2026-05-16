@@ -1,31 +1,98 @@
 {
   "domain": "risk-gates",
-  "description": "Representative risk gates for blocking, downgrading, or escalating ActionCode decisions.",
+  "schemaVersion": "stockai.rules.gates.v2",
+  "description": "Critical, High, Medium, and Warning risk gates with score caps, forced ActionCodes, risk penalties, final grades, priorities, and explanation templates.",
   "gates": {
     "Critical Gate": {
-      "action": "block_analysis_or_exit_priority",
+      "priority": 1,
+      "scoreCap": 0,
+      "riskPenalty": 100,
+      "forcedActionCode": "ANALYSIS_EXCLUDED",
+      "finalGrade": "?? ?? / ?? ??",
       "conditions": [
         "trading_halt_risk >= 90",
         "delisting_risk >= 80",
         "audit_opinion_risk >= 85",
+        "capital_impairment_ratio >= 50",
+        "data_quality_score < 35",
         "data_quality_collapse == true"
       ],
-      "allowedActionCodes": ["ANALYSIS_EXCLUDED", "EXIT_PRIORITY", "HUMAN_REVIEW"]
+      "allowedActionCodes": [
+        "ANALYSIS_EXCLUDED",
+        "HUMAN_REVIEW"
+      ],
+      "explanationTemplate": "?? ??? ???? ????? ?? ?? ?? ??? ???? ?????. ?? ???? ???? ??? AI? ?? ??? ?????."
     },
     "High Risk Gate": {
-      "action": "block_new_buy_and_reduce_risk",
-      "conditions": ["liquidity_vacuum_risk >= 75", "RiskScore >= 80", "false_breakout_risk >= 80"],
-      "allowedActionCodes": ["RISK_REDUCTION", "EXIT_PRIORITY", "AVOID", "HUMAN_REVIEW"]
+      "priority": 2,
+      "scoreCap": 49,
+      "riskPenalty": 15,
+      "forcedActionCode": "AVOID",
+      "finalGrade": "??? / ?? ??",
+      "conditions": [
+        "liquidity_vacuum_risk >= 75",
+        "RiskScore >= 80",
+        "false_breakout_risk >= 80",
+        "fake_liquidity_score > 70",
+        "investment_risk_flag == true"
+      ],
+      "allowedActionCodes": [
+        "AVOID",
+        "HUMAN_REVIEW",
+        "RISK_REDUCTION",
+        "EXIT_PRIORITY"
+      ],
+      "explanationTemplate": "??? ?? ??? ??????? ??? ???? ?????. ?? ??? 49? ??? ???? ?? ??? ??????."
     },
     "Medium Risk Gate": {
-      "action": "require_confirmation",
-      "conditions": ["RiskScore >= 60", "spread_risk_score >= 60", "macro_event_risk_score >= 60"],
-      "allowedActionCodes": ["WAIT_CONFIRMATION", "WATCHLIST", "HOLD", "PARTIAL_PROFIT_TAKING"]
+      "priority": 3,
+      "scoreCap": 69,
+      "riskPenalty": 8,
+      "forcedActionCode": "WAIT_CONFIRMATION",
+      "finalGrade": "?? ?? / ?? ??",
+      "conditions": [
+        "RiskScore >= 60",
+        "spread_risk_score >= 60",
+        "macro_event_risk_score >= 60",
+        "close_price < vwap and below_vwap_minutes > 60",
+        "distribution_layer_score > 65"
+      ],
+      "allowedActionCodes": [
+        "WAIT_CONFIRMATION",
+        "WATCHLIST",
+        "HOLD",
+        "RISK_REDUCTION",
+        "PARTIAL_PROFIT_TAKING"
+      ],
+      "explanationTemplate": "?? ??? ??? ?? ??? ???? ?? ???? ???????. VWAP ??, ?? ?? ??, ??? ?? ??? ???? ??? ??? ??? ?????."
     },
     "Warning Gate": {
-      "action": "add_warning_message",
-      "conditions": ["RiskScore >= 45", "volume_climax_score >= 65", "fomo_risk >= 60"],
-      "allowedActionCodes": ["BUY_ON_PULLBACK", "WAIT_CONFIRMATION", "WATCHLIST", "HOLD"]
+      "priority": 4,
+      "scoreCap": 100,
+      "riskPenalty": 3,
+      "forcedActionCode": "BUY_ON_PULLBACK",
+      "finalGrade": "?? / ?? ??",
+      "conditions": [
+        "RiskScore >= 45",
+        "volume_climax_score >= 65",
+        "fomo_risk >= 60",
+        "rsi_14 > 72",
+        "price_position_52w > 95"
+      ],
+      "allowedActionCodes": [
+        "BUY_ON_PULLBACK",
+        "WAIT_CONFIRMATION",
+        "WATCHLIST",
+        "HOLD",
+        "PARTIAL_PROFIT_TAKING"
+      ],
+      "explanationTemplate": "??? ???? ??? ?? ?? ?? ??? ??? ?????. ?? ????? ?? ?? ? ??? ?????."
     }
+  },
+  "overlapPolicy": {
+    "criticalDominates": true,
+    "highRiskScoreCap": 49,
+    "mediumRiskDoubleCap": 59,
+    "warningPenaltyFormula": "WarningGateCount * 1_to_3"
   }
 }

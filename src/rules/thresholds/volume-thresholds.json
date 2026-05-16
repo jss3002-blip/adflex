@@ -1,24 +1,304 @@
 {
   "domain": "volume-thresholds",
   "description": "Representative low, mid, high, and critical thresholds for volume expansion and turnover.",
+  "schemaVersion": "stockai.rules.thresholds.v2",
   "thresholds": {
     "volume_ratio_20d": {
-      "lo": { "max": 0.8 },
-      "mid": { "min": 0.81, "max": 1.5 },
-      "hi": { "min": 1.51, "max": 3 },
-      "critical": { "min": 3.01 }
+      "description": "Threshold set for volume_ratio_20d",
+      "initial": {
+        "values": {
+          "lo": {
+            "max": 0.8
+          },
+          "mid": {
+            "min": 0.81,
+            "max": 1.5
+          },
+          "hi": {
+            "min": 1.51,
+            "max": 3
+          },
+          "critical": {
+            "min": 3.01
+          }
+        },
+        "source": "expert_initial_rule_from_design_document"
+      },
+      "loMidHi": {
+        "lo": {
+          "max": 0.8
+        },
+        "mid": {
+          "min": 0.81,
+          "max": 1.5
+        },
+        "hi": {
+          "min": 1.51,
+          "max": 3
+        }
+      },
+      "optimized": {
+        "values": null,
+        "status": "pending_backtest",
+        "lastTunedAt": null,
+        "sampleSize": 0
+      },
+      "marketRegimeOverrides": {
+        "STRONG_UPTREND": {
+          "riskPenaltyMultiplier": 0.85,
+          "breakoutMultiplier": 1.15
+        },
+        "SIDEWAYS": {
+          "riskPenaltyMultiplier": 1,
+          "breakoutMultiplier": 0.9
+        },
+        "STRONG_DOWNTREND": {
+          "riskPenaltyMultiplier": 1.4,
+          "breakoutMultiplier": 0.65
+        },
+        "HIGH_VOLATILITY": {
+          "riskPenaltyMultiplier": 1.25,
+          "breakoutMultiplier": 0.85
+        }
+      },
+      "stockTypeOverrides": {
+        "LARGE_CAP": {
+          "liquidityPenaltyMultiplier": 0.8,
+          "flowWeightMultiplier": 1.15
+        },
+        "THEME": {
+          "narrativeWeightMultiplier": 1.25,
+          "riskGateMultiplier": 1.15
+        },
+        "LOW_LIQUIDITY": {
+          "liquidityPenaltyMultiplier": 1.6,
+          "buyActionRestriction": "BUY_NOW_blocked"
+        }
+      },
+      "thresholdQualityScoreInputs": {
+        "inputs": [
+          "WinRateScore",
+          "ExpectedReturnScore",
+          "ProfitLossRatioScore",
+          "MaxDrawdownControlScore",
+          "SignalFrequencyScore",
+          "RegimeStabilityScore"
+        ],
+        "formula": "0.25*WinRateScore + 0.25*ExpectedReturnScore + 0.20*ProfitLossRatioScore + 0.15*MaxDrawdownControlScore + 0.10*SignalFrequencyScore + 0.05*RegimeStabilityScore"
+      },
+      "backtestMetrics": [
+        "signalCount",
+        "averageReturn",
+        "winRate",
+        "expectedValue",
+        "profitFactor",
+        "maxDrawdown",
+        "falseSignalRate",
+        "riskGateAvoidanceEffect"
+      ],
+      "retuningPolicy": {
+        "cadence": "weekly_or_after_1000_new_signals",
+        "method": "walk_forward_and_out_of_sample",
+        "overfitGuard": "reject_if_training_test_win_rate_gap_gt_15pct_or_oos_mdd_doubles"
+      }
     },
     "volume_climax_score": {
-      "lo": { "max": 35 },
-      "mid": { "min": 36, "max": 65 },
-      "hi": { "min": 66, "max": 84 },
-      "critical": { "min": 85 }
+      "description": "Threshold set for volume_climax_score",
+      "initial": {
+        "values": {
+          "lo": {
+            "max": 35
+          },
+          "mid": {
+            "min": 36,
+            "max": 65
+          },
+          "hi": {
+            "min": 66,
+            "max": 84
+          },
+          "critical": {
+            "min": 85
+          }
+        },
+        "source": "expert_initial_rule_from_design_document"
+      },
+      "loMidHi": {
+        "lo": {
+          "max": 35
+        },
+        "mid": {
+          "min": 36,
+          "max": 65
+        },
+        "hi": {
+          "min": 66,
+          "max": 84
+        }
+      },
+      "optimized": {
+        "values": null,
+        "status": "pending_backtest",
+        "lastTunedAt": null,
+        "sampleSize": 0
+      },
+      "marketRegimeOverrides": {
+        "STRONG_UPTREND": {
+          "riskPenaltyMultiplier": 0.85,
+          "breakoutMultiplier": 1.15
+        },
+        "SIDEWAYS": {
+          "riskPenaltyMultiplier": 1,
+          "breakoutMultiplier": 0.9
+        },
+        "STRONG_DOWNTREND": {
+          "riskPenaltyMultiplier": 1.4,
+          "breakoutMultiplier": 0.65
+        },
+        "HIGH_VOLATILITY": {
+          "riskPenaltyMultiplier": 1.25,
+          "breakoutMultiplier": 0.85
+        }
+      },
+      "stockTypeOverrides": {
+        "LARGE_CAP": {
+          "liquidityPenaltyMultiplier": 0.8,
+          "flowWeightMultiplier": 1.15
+        },
+        "THEME": {
+          "narrativeWeightMultiplier": 1.25,
+          "riskGateMultiplier": 1.15
+        },
+        "LOW_LIQUIDITY": {
+          "liquidityPenaltyMultiplier": 1.6,
+          "buyActionRestriction": "BUY_NOW_blocked"
+        }
+      },
+      "thresholdQualityScoreInputs": {
+        "inputs": [
+          "WinRateScore",
+          "ExpectedReturnScore",
+          "ProfitLossRatioScore",
+          "MaxDrawdownControlScore",
+          "SignalFrequencyScore",
+          "RegimeStabilityScore"
+        ],
+        "formula": "0.25*WinRateScore + 0.25*ExpectedReturnScore + 0.20*ProfitLossRatioScore + 0.15*MaxDrawdownControlScore + 0.10*SignalFrequencyScore + 0.05*RegimeStabilityScore"
+      },
+      "backtestMetrics": [
+        "signalCount",
+        "averageReturn",
+        "winRate",
+        "expectedValue",
+        "profitFactor",
+        "maxDrawdown",
+        "falseSignalRate",
+        "riskGateAvoidanceEffect"
+      ],
+      "retuningPolicy": {
+        "cadence": "weekly_or_after_1000_new_signals",
+        "method": "walk_forward_and_out_of_sample",
+        "overfitGuard": "reject_if_training_test_win_rate_gap_gt_15pct_or_oos_mdd_doubles"
+      }
     },
     "trading_value_score": {
-      "lo": { "max": 40 },
-      "mid": { "min": 41, "max": 65 },
-      "hi": { "min": 66, "max": 85 },
-      "critical": { "min": 86 }
+      "description": "Threshold set for trading_value_score",
+      "initial": {
+        "values": {
+          "lo": {
+            "max": 40
+          },
+          "mid": {
+            "min": 41,
+            "max": 65
+          },
+          "hi": {
+            "min": 66,
+            "max": 85
+          },
+          "critical": {
+            "min": 86
+          }
+        },
+        "source": "expert_initial_rule_from_design_document"
+      },
+      "loMidHi": {
+        "lo": {
+          "max": 40
+        },
+        "mid": {
+          "min": 41,
+          "max": 65
+        },
+        "hi": {
+          "min": 66,
+          "max": 85
+        }
+      },
+      "optimized": {
+        "values": null,
+        "status": "pending_backtest",
+        "lastTunedAt": null,
+        "sampleSize": 0
+      },
+      "marketRegimeOverrides": {
+        "STRONG_UPTREND": {
+          "riskPenaltyMultiplier": 0.85,
+          "breakoutMultiplier": 1.15
+        },
+        "SIDEWAYS": {
+          "riskPenaltyMultiplier": 1,
+          "breakoutMultiplier": 0.9
+        },
+        "STRONG_DOWNTREND": {
+          "riskPenaltyMultiplier": 1.4,
+          "breakoutMultiplier": 0.65
+        },
+        "HIGH_VOLATILITY": {
+          "riskPenaltyMultiplier": 1.25,
+          "breakoutMultiplier": 0.85
+        }
+      },
+      "stockTypeOverrides": {
+        "LARGE_CAP": {
+          "liquidityPenaltyMultiplier": 0.8,
+          "flowWeightMultiplier": 1.15
+        },
+        "THEME": {
+          "narrativeWeightMultiplier": 1.25,
+          "riskGateMultiplier": 1.15
+        },
+        "LOW_LIQUIDITY": {
+          "liquidityPenaltyMultiplier": 1.6,
+          "buyActionRestriction": "BUY_NOW_blocked"
+        }
+      },
+      "thresholdQualityScoreInputs": {
+        "inputs": [
+          "WinRateScore",
+          "ExpectedReturnScore",
+          "ProfitLossRatioScore",
+          "MaxDrawdownControlScore",
+          "SignalFrequencyScore",
+          "RegimeStabilityScore"
+        ],
+        "formula": "0.25*WinRateScore + 0.25*ExpectedReturnScore + 0.20*ProfitLossRatioScore + 0.15*MaxDrawdownControlScore + 0.10*SignalFrequencyScore + 0.05*RegimeStabilityScore"
+      },
+      "backtestMetrics": [
+        "signalCount",
+        "averageReturn",
+        "winRate",
+        "expectedValue",
+        "profitFactor",
+        "maxDrawdown",
+        "falseSignalRate",
+        "riskGateAvoidanceEffect"
+      ],
+      "retuningPolicy": {
+        "cadence": "weekly_or_after_1000_new_signals",
+        "method": "walk_forward_and_out_of_sample",
+        "overfitGuard": "reject_if_training_test_win_rate_gap_gt_15pct_or_oos_mdd_doubles"
+      }
     }
   }
 }

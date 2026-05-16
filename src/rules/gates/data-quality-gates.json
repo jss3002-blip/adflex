@@ -1,20 +1,125 @@
 {
   "domain": "data-quality-gates",
-  "description": "Representative data quality weights for deciding confidence penalties and analysis exclusion.",
+  "schemaVersion": "stockai.rules.gates.v2",
+  "description": "DataQualityScore weights, missing-data policy, freshness policy, confidence penalties, and analysis restrictions.",
+  "scoreFormula": {
+    "total": 100,
+    "weights": {
+      "priceDataCompleteness": 20,
+      "volumeDataCompleteness": 15,
+      "minuteDataCompleteness": 15,
+      "vwapAvailability": 10,
+      "orderbookAvailability": 10,
+      "flowFreshness": 10,
+      "newsDisclosureReliability": 10,
+      "financialFreshness": 5,
+      "backtestConsistency": 5
+    }
+  },
   "qualityWeights": {
-    "priceDataCompleteness": { "weight": 0.16, "minimum": 0.98, "criticalBelow": 0.9 },
-    "volumeDataCompleteness": { "weight": 0.12, "minimum": 0.97, "criticalBelow": 0.88 },
-    "minuteDataCompleteness": { "weight": 0.12, "minimum": 0.95, "criticalBelow": 0.82 },
-    "vwapAvailability": { "weight": 0.1, "minimum": 0.95, "criticalBelow": 0.8 },
-    "orderbookAvailability": { "weight": 0.1, "minimum": 0.9, "criticalBelow": 0.7 },
-    "flowFreshness": { "weight": 0.11, "minimum": 0.9, "criticalBelow": 0.65 },
-    "newsDisclosureReliability": { "weight": 0.11, "minimum": 0.85, "criticalBelow": 0.6 },
-    "financialFreshness": { "weight": 0.1, "minimum": 0.85, "criticalBelow": 0.55 },
-    "backtestConsistency": { "weight": 0.08, "minimum": 0.8, "criticalBelow": 0.5 }
+    "priceDataCompleteness": {
+      "weight": 0.2,
+      "minimum": 0.98,
+      "criticalBelow": 0.9
+    },
+    "volumeDataCompleteness": {
+      "weight": 0.15,
+      "minimum": 0.97,
+      "criticalBelow": 0.88
+    },
+    "minuteDataCompleteness": {
+      "weight": 0.15,
+      "minimum": 0.95,
+      "criticalBelow": 0.82
+    },
+    "vwapAvailability": {
+      "weight": 0.1,
+      "minimum": 0.95,
+      "criticalBelow": 0.8
+    },
+    "orderbookAvailability": {
+      "weight": 0.1,
+      "minimum": 0.9,
+      "criticalBelow": 0.7
+    },
+    "flowFreshness": {
+      "weight": 0.1,
+      "minimum": 0.9,
+      "criticalBelow": 0.65
+    },
+    "newsDisclosureReliability": {
+      "weight": 0.1,
+      "minimum": 0.85,
+      "criticalBelow": 0.6
+    },
+    "financialFreshness": {
+      "weight": 0.05,
+      "minimum": 0.85,
+      "criticalBelow": 0.55
+    },
+    "backtestConsistency": {
+      "weight": 0.05,
+      "minimum": 0.8,
+      "criticalBelow": 0.5
+    }
+  },
+  "bands": {
+    "normal": {
+      "min": 80,
+      "action": "normal_analysis"
+    },
+    "degraded": {
+      "min": 60,
+      "max": 79,
+      "action": "ConfidenceScore_penalty"
+    },
+    "partial": {
+      "min": 35,
+      "max": 59,
+      "action": "HUMAN_REVIEW_possible"
+    },
+    "collapse": {
+      "max": 34,
+      "action": "HUMAN_REVIEW_or_analysis_hold"
+    }
+  },
+  "missingDataPolicy": {
+    "vwap": {
+      "fallback": "estimated_vwap_or_average_execution_price",
+      "confidencePenalty": 5
+    },
+    "minuteData": {
+      "fallback": "daily_bar_only; hold ORB/IB/VWAP duration judgments",
+      "confidencePenalty": 8
+    },
+    "orderbook": {
+      "fallback": "volume_and_trade_strength_proxy",
+      "confidencePenalty": 5
+    },
+    "tradeStrength": {
+      "fallback": "buy_sell_volume_ratio",
+      "confidencePenalty": 4
+    },
+    "flowDelay": {
+      "fallback": "previous_day_flow_plus_program_flow",
+      "confidencePenalty": 5
+    },
+    "newsSentiment": {
+      "fallback": "disclosure_title_and_price_reaction",
+      "confidencePenalty": 3
+    },
+    "financialOld": {
+      "fallback": "latest_disclosure",
+      "confidencePenalty": 5
+    },
+    "backtestSmallSample": {
+      "fallback": "expand_peer_group",
+      "confidencePenalty": 5
+    }
   },
   "gateActions": {
-    "degradeConfidence": "qualityScore < 85",
-    "requireHumanReview": "qualityScore < 70",
-    "excludeAnalysis": "qualityScore < 55"
+    "degradeConfidence": "DataQualityScore < 80",
+    "requireHumanReview": "DataQualityScore < 60",
+    "excludeAnalysis": "DataQualityScore < 35 or core price data missing"
   }
 }

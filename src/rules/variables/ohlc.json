@@ -1,42 +1,374 @@
 {
   "domain": "ohlc",
   "description": "Controls candle structure variables derived from open, high, low, and close data.",
+  "schemaVersion": "stockai.rules.variables.v2",
+  "standard": "standardized_variable_dictionary",
   "variables": {
     "close_position_score": {
+      "id": "close_position_score",
+      "name": "Close Position Score",
+      "koreanName": "?? ?? ??",
+      "category": "ohlc_candle",
       "type": "score",
       "description": "Scores the close location inside the candle range.",
-      "inputs": ["open", "high", "low", "close"],
+      "inputs": [
+        "open",
+        "high",
+        "low",
+        "close"
+      ],
       "formula": "(close - low) / (high - low) * 100",
       "normalization": "clip_0_100",
-      "scoreBands": ["weak_close:0-35", "mid_close:36-65", "strong_close:66-100"],
-      "scoreGroup": ["PriceStateScore"],
+      "unit": "0_100_score",
+      "direction": "higher_is_better",
+      "scoreBands": [
+        "weak_close:0-35",
+        "mid_close:36-65",
+        "strong_close:66-100"
+      ],
       "thresholdRef": "price-thresholds.close_position_score",
-      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 5 },
-      "backtestLabels": ["return_1d", "target_hit_label"]
+      "missingPolicy": {
+        "fallback": null,
+        "fallbackLogic": "use neutral value when no reliable proxy exists; use documented proxy when available",
+        "neutralValue": 50,
+        "defaultScore": 50,
+        "confidencePenalty": 5,
+        "actionRestriction": "if missing data materially affects this variable, block BUY_NOW and prefer WAIT_CONFIRMATION or HUMAN_REVIEW",
+        "recomputeWhenConfirmed": true
+      },
+      "confidencePenalty": 5,
+      "realTimeHandling": {
+        "updateCadence": "realtime_to_5m",
+        "realtimeValuePolicy": "estimated values must be flagged and later reconciled with confirmed close data",
+        "staleDataPolicy": "apply ConfidenceScore penalty and restrict aggressive ActionCodes",
+        "cachePolicy": "1s_to_5m_by_source"
+      },
+      "usedIn": [
+        "PriceStateScore"
+      ],
+      "usedInEngine": [
+        "OpportunityScore"
+      ],
+      "timeHorizon": [
+        "shortTerm"
+      ],
+      "calculationTiming": {
+        "realtime": true,
+        "intraday": true,
+        "endOfDayConfirmed": true,
+        "backtestReproducible": true
+      },
+      "dataFreshness": {
+        "required": "latest_available_tick_or_bar",
+        "maxStaleBeforePenalty": "5m",
+        "criticalStaleAction": "HUMAN_REVIEW"
+      },
+      "sourceReliability": {
+        "primary": "exchange_realtime_high",
+        "scoreImpact": "contributes to ConfidenceScore and DataQualityScore",
+        "officialSourcePreferred": true
+      },
+      "regimeAdjustment": {
+        "strongUptrend": "relax ordinary overheat penalties and reward continuation if risk gates are clear",
+        "sideways": "prioritize range boundaries, false breakout risk, and confirmation",
+        "strongDowntrend": "increase risk penalties and require stronger confirmation",
+        "highVolatility": "increase slippage, spread, and false signal penalties"
+      },
+      "stockTypeAdjustment": {
+        "largeCap": "increase flow and macro relevance; reduce orderbook fragility weight",
+        "smallCap": "increase liquidity, spread, and fake liquidity penalties",
+        "theme": "increase narrative, volume, and crowding sensitivity; reduce pure financial weight",
+        "lowLiquidity": "prioritize liquidity risk and execution gates",
+        "ipoOrEventStock": "require wider thresholds and higher sample-size caution"
+      },
+      "thresholdOptimization": {
+        "initial": {
+          "lo": 35,
+          "mid": 65,
+          "hi": 80
+        },
+        "optimized": {
+          "lo": null,
+          "mid": null,
+          "hi": null,
+          "status": "pending_backtest"
+        },
+        "thresholdQualityScoreInputs": [
+          "winRate",
+          "expectedReturn",
+          "profitLossRatio",
+          "maxDrawdownControl",
+          "signalFrequency",
+          "regimeStability"
+        ],
+        "selectionRule": "choose highest ThresholdQualityScore with acceptable MDD, enough signal frequency, and stable regime performance"
+      },
+      "validationMetrics": {
+        "required": [
+          "signalCount",
+          "averageReturn",
+          "medianReturn",
+          "winRate",
+          "expectedValue",
+          "profitFactor",
+          "maxDrawdown",
+          "falseSignalRate",
+          "actionSuccessRate"
+        ],
+        "regimeBreakdown": true,
+        "stockTypeBreakdown": true,
+        "costAdjustedReturn": true,
+        "walkForwardRequired": true,
+        "minimumSample": 100
+      },
+      "backtestLabels": [
+        "return_1d",
+        "target_hit_label"
+      ]
     },
     "upper_wick_ratio": {
+      "id": "upper_wick_ratio",
+      "name": "Upper Wick Ratio",
+      "koreanName": "??? ??",
+      "category": "ohlc_candle",
       "type": "ratio",
       "description": "Measures selling pressure shown by the upper wick.",
-      "inputs": ["open", "high", "close"],
+      "inputs": [
+        "open",
+        "high",
+        "close"
+      ],
       "formula": "(high - max(open, close)) / high",
       "normalization": "percentage",
-      "scoreBands": ["low_supply:0-0.15", "moderate_supply:0.16-0.35", "heavy_supply:0.36+"],
-      "scoreGroup": ["PriceStateScore", "RiskScore"],
+      "unit": "ratio_or_percent",
+      "direction": "contextual",
+      "scoreBands": [
+        "low_supply:0-0.15",
+        "moderate_supply:0.16-0.35",
+        "heavy_supply:0.36+"
+      ],
       "thresholdRef": "price-thresholds.upper_wick_ratio",
-      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 5 },
-      "backtestLabels": ["false_breakout_label", "max_drawdown_1d"]
+      "missingPolicy": {
+        "fallback": null,
+        "fallbackLogic": "use neutral value when no reliable proxy exists; use documented proxy when available",
+        "neutralValue": 50,
+        "defaultScore": 50,
+        "confidencePenalty": 5,
+        "actionRestriction": "if missing data materially affects this variable, block BUY_NOW and prefer WAIT_CONFIRMATION or HUMAN_REVIEW",
+        "recomputeWhenConfirmed": true
+      },
+      "confidencePenalty": 5,
+      "realTimeHandling": {
+        "updateCadence": "realtime_to_5m",
+        "realtimeValuePolicy": "estimated values must be flagged and later reconciled with confirmed close data",
+        "staleDataPolicy": "apply ConfidenceScore penalty and restrict aggressive ActionCodes",
+        "cachePolicy": "1s_to_5m_by_source"
+      },
+      "usedIn": [
+        "PriceStateScore",
+        "RiskScore"
+      ],
+      "usedInEngine": [
+        "RiskScore"
+      ],
+      "timeHorizon": [
+        "shortTerm"
+      ],
+      "calculationTiming": {
+        "realtime": true,
+        "intraday": true,
+        "endOfDayConfirmed": true,
+        "backtestReproducible": true
+      },
+      "dataFreshness": {
+        "required": "latest_available_tick_or_bar",
+        "maxStaleBeforePenalty": "5m",
+        "criticalStaleAction": "HUMAN_REVIEW"
+      },
+      "sourceReliability": {
+        "primary": "exchange_realtime_high",
+        "scoreImpact": "contributes to ConfidenceScore and DataQualityScore",
+        "officialSourcePreferred": true
+      },
+      "regimeAdjustment": {
+        "strongUptrend": "relax ordinary overheat penalties and reward continuation if risk gates are clear",
+        "sideways": "prioritize range boundaries, false breakout risk, and confirmation",
+        "strongDowntrend": "increase risk penalties and require stronger confirmation",
+        "highVolatility": "increase slippage, spread, and false signal penalties"
+      },
+      "stockTypeAdjustment": {
+        "largeCap": "increase flow and macro relevance; reduce orderbook fragility weight",
+        "smallCap": "increase liquidity, spread, and fake liquidity penalties",
+        "theme": "increase narrative, volume, and crowding sensitivity; reduce pure financial weight",
+        "lowLiquidity": "prioritize liquidity risk and execution gates",
+        "ipoOrEventStock": "require wider thresholds and higher sample-size caution"
+      },
+      "thresholdOptimization": {
+        "initial": {
+          "lo": 20,
+          "mid": 65,
+          "hi": 80
+        },
+        "optimized": {
+          "lo": null,
+          "mid": null,
+          "hi": null,
+          "status": "pending_backtest"
+        },
+        "thresholdQualityScoreInputs": [
+          "winRate",
+          "expectedReturn",
+          "profitLossRatio",
+          "maxDrawdownControl",
+          "signalFrequency",
+          "regimeStability"
+        ],
+        "selectionRule": "choose highest ThresholdQualityScore with acceptable MDD, enough signal frequency, and stable regime performance"
+      },
+      "validationMetrics": {
+        "required": [
+          "signalCount",
+          "averageReturn",
+          "medianReturn",
+          "winRate",
+          "expectedValue",
+          "profitFactor",
+          "maxDrawdown",
+          "falseSignalRate",
+          "actionSuccessRate"
+        ],
+        "regimeBreakdown": true,
+        "stockTypeBreakdown": true,
+        "costAdjustedReturn": true,
+        "walkForwardRequired": true,
+        "minimumSample": 100
+      },
+      "backtestLabels": [
+        "false_breakout_label",
+        "max_drawdown_1d"
+      ]
     },
     "lower_wick_ratio": {
+      "id": "lower_wick_ratio",
+      "name": "Lower Wick Ratio",
+      "koreanName": "???? ??",
+      "category": "ohlc_candle",
       "type": "ratio",
       "description": "Measures intraday demand absorption shown by the lower wick.",
-      "inputs": ["open", "low", "close"],
+      "inputs": [
+        "open",
+        "low",
+        "close"
+      ],
       "formula": "(min(open, close) - low) / close",
       "normalization": "percentage",
-      "scoreBands": ["low_absorption:0-0.15", "normal:0.16-0.35", "strong_absorption:0.36+"],
-      "scoreGroup": ["PriceStateScore", "SmartMoneyScore"],
+      "unit": "ratio_or_percent",
+      "direction": "contextual",
+      "scoreBands": [
+        "low_absorption:0-0.15",
+        "normal:0.16-0.35",
+        "strong_absorption:0.36+"
+      ],
       "thresholdRef": "price-thresholds.lower_wick_ratio",
-      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 5 },
-      "backtestLabels": ["vwap_hold_label", "return_3d"]
+      "missingPolicy": {
+        "fallback": null,
+        "fallbackLogic": "use neutral value when no reliable proxy exists; use documented proxy when available",
+        "neutralValue": 50,
+        "defaultScore": 50,
+        "confidencePenalty": 5,
+        "actionRestriction": "if missing data materially affects this variable, block BUY_NOW and prefer WAIT_CONFIRMATION or HUMAN_REVIEW",
+        "recomputeWhenConfirmed": true
+      },
+      "confidencePenalty": 5,
+      "realTimeHandling": {
+        "updateCadence": "realtime_to_5m",
+        "realtimeValuePolicy": "estimated values must be flagged and later reconciled with confirmed close data",
+        "staleDataPolicy": "apply ConfidenceScore penalty and restrict aggressive ActionCodes",
+        "cachePolicy": "1s_to_5m_by_source"
+      },
+      "usedIn": [
+        "PriceStateScore",
+        "SmartMoneyScore"
+      ],
+      "usedInEngine": [
+        "OpportunityScore"
+      ],
+      "timeHorizon": [
+        "shortTerm"
+      ],
+      "calculationTiming": {
+        "realtime": true,
+        "intraday": true,
+        "endOfDayConfirmed": true,
+        "backtestReproducible": true
+      },
+      "dataFreshness": {
+        "required": "latest_available_tick_or_bar",
+        "maxStaleBeforePenalty": "5m",
+        "criticalStaleAction": "HUMAN_REVIEW"
+      },
+      "sourceReliability": {
+        "primary": "exchange_realtime_high",
+        "scoreImpact": "contributes to ConfidenceScore and DataQualityScore",
+        "officialSourcePreferred": true
+      },
+      "regimeAdjustment": {
+        "strongUptrend": "relax ordinary overheat penalties and reward continuation if risk gates are clear",
+        "sideways": "prioritize range boundaries, false breakout risk, and confirmation",
+        "strongDowntrend": "increase risk penalties and require stronger confirmation",
+        "highVolatility": "increase slippage, spread, and false signal penalties"
+      },
+      "stockTypeAdjustment": {
+        "largeCap": "increase flow and macro relevance; reduce orderbook fragility weight",
+        "smallCap": "increase liquidity, spread, and fake liquidity penalties",
+        "theme": "increase narrative, volume, and crowding sensitivity; reduce pure financial weight",
+        "lowLiquidity": "prioritize liquidity risk and execution gates",
+        "ipoOrEventStock": "require wider thresholds and higher sample-size caution"
+      },
+      "thresholdOptimization": {
+        "initial": {
+          "lo": 20,
+          "mid": 65,
+          "hi": 80
+        },
+        "optimized": {
+          "lo": null,
+          "mid": null,
+          "hi": null,
+          "status": "pending_backtest"
+        },
+        "thresholdQualityScoreInputs": [
+          "winRate",
+          "expectedReturn",
+          "profitLossRatio",
+          "maxDrawdownControl",
+          "signalFrequency",
+          "regimeStability"
+        ],
+        "selectionRule": "choose highest ThresholdQualityScore with acceptable MDD, enough signal frequency, and stable regime performance"
+      },
+      "validationMetrics": {
+        "required": [
+          "signalCount",
+          "averageReturn",
+          "medianReturn",
+          "winRate",
+          "expectedValue",
+          "profitFactor",
+          "maxDrawdown",
+          "falseSignalRate",
+          "actionSuccessRate"
+        ],
+        "regimeBreakdown": true,
+        "stockTypeBreakdown": true,
+        "costAdjustedReturn": true,
+        "walkForwardRequired": true,
+        "minimumSample": 100
+      },
+      "backtestLabels": [
+        "vwap_hold_label",
+        "return_3d"
+      ]
     }
   }
 }

@@ -1,35 +1,80 @@
 {
   "domain": "overlap-penalty",
-  "description": "Controls duplicate signal penalties and contribution caps for future rule aggregation.",
+  "schemaVersion": "stockai.rules.scoring.v2",
+  "description": "Overlap penalty, signal conflict resolution, and independent signal verification.",
   "penalties": {
     "FeatureOverlapPenalty": {
-      "description": "Reduces score when multiple variables reuse nearly identical source signals.",
-      "examples": [
-        { "features": ["volume_ratio_20d", "volume_climax_score"], "penalty": 0.12 },
-        { "features": ["upper_wick_ratio", "false_breakout_risk"], "penalty": 0.1 }
-      ]
+      "formula": "0.10*Correlation(VolumeScore,BreakoutScore)+0.10*Correlation(VWAPScore,TrendScore)+0.10*Correlation(FlowScore,ProgramScore)+0.10*Correlation(SmartMoneyScore,VolumeScore)",
+      "capWhenCorrelationGte": 0.8,
+      "overlappingBonusCap": 0.5
     },
     "FeatureCorrelationPenalty": {
-      "description": "Applies penalty when historical feature correlation exceeds a threshold.",
       "correlationThreshold": 0.82,
       "maxPenalty": 0.18
     },
     "SourceContributionCap": {
-      "description": "Caps total score contribution from one source family.",
-      "caps": { "price": 0.28, "volume": 0.22, "news": 0.18, "flow": 0.22 }
+      "caps": {
+        "price": 0.28,
+        "volume": 0.22,
+        "news": 0.18,
+        "flow": 0.22,
+        "sentiment": 0.16
+      }
     },
     "GroupContributionCap": {
-      "description": "Caps group-level contribution to avoid one domain dominating decisions.",
-      "caps": { "BreakoutScore": 0.22, "RiskScore": 0.3, "SentimentScore": 0.16 }
+      "caps": {
+        "BreakoutScore": 0.22,
+        "RiskScore": 0.3,
+        "SentimentScore": 0.16
+      }
     },
     "IndependentSignalCount": {
-      "description": "Requires multiple independent confirmations for high-conviction actions.",
-      "minimumForBuyNow": 4,
-      "minimumForWatchlist": 2
+      "groups": [
+        "price_structure",
+        "volume",
+        "vwap_execution",
+        "foreign_institution_flow",
+        "news_disclosure",
+        "financial",
+        "sector_regime",
+        "orderbook_liquidity",
+        "derivative_short",
+        "sentiment_narrative"
+      ],
+      "minimumForBuyNow": 5,
+      "minimumForWatchlist": 2,
+      "penaltyIfBelow3": "ConfidenceScore -5"
     },
     "RiskSignalOverride": {
-      "description": "Allows critical risk variables to override opportunity scores.",
-      "overrideWhen": ["delisting_risk >= 80", "data_quality_risk >= 75", "liquidity_risk_score >= 85"]
+      "overrideWhen": [
+        "Critical Gate == true",
+        "delisting_risk >= 80",
+        "data_quality_risk >= 75",
+        "liquidity_risk_score >= 85"
+      ]
     }
+  },
+  "signalConflictResolution": {
+    "priority": [
+      "Critical Gate",
+      "High Risk Gate",
+      "Medium Risk Gate",
+      "marketability",
+      "VWAP status",
+      "close position",
+      "volume persistence",
+      "absorption and cumulative delta",
+      "flow direction",
+      "market regime",
+      "stock type",
+      "final score"
+    ],
+    "examples": [
+      "new_high_breakout vs upper_wick_and_vwap_loss",
+      "positive_news vs bearish_candle",
+      "gap_up vs gap_fill_failure",
+      "strong_close vs closing_auction_sell_imbalance",
+      "spot_flow_positive vs derivative_overheat"
+    ]
   }
 }

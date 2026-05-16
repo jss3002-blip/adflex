@@ -1,42 +1,379 @@
 {
   "domain": "trend",
   "description": "Controls moving average alignment, slope, and trend risk variables.",
+  "schemaVersion": "stockai.rules.variables.v2",
+  "standard": "standardized_variable_dictionary",
   "variables": {
     "ma_alignment_score": {
+      "id": "ma_alignment_score",
+      "name": "Ma Alignment Score",
+      "koreanName": "???? ?? ??",
+      "category": "trend",
       "type": "score",
       "description": "Scores bullish or bearish ordering across short, medium, and long moving averages.",
-      "inputs": ["ma5", "ma20", "ma60", "ma120"],
+      "inputs": [
+        "ma5",
+        "ma20",
+        "ma60",
+        "ma120"
+      ],
       "formula": "weighted_order_score(ma5, ma20, ma60, ma120)",
       "normalization": "clip_0_100",
-      "scoreBands": ["bearish:0-35", "mixed:36-65", "bullish:66-100"],
-      "scoreGroup": ["TrendScore"],
+      "unit": "0_100_score",
+      "direction": "higher_is_better",
+      "scoreBands": [
+        "bearish:0-35",
+        "mixed:36-65",
+        "bullish:66-100"
+      ],
       "thresholdRef": null,
-      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
-      "backtestLabels": ["return_5d", "return_20d"]
+      "missingPolicy": {
+        "fallback": null,
+        "fallbackLogic": "use neutral value when no reliable proxy exists; use documented proxy when available",
+        "neutralValue": 50,
+        "defaultScore": 50,
+        "confidencePenalty": 8,
+        "actionRestriction": "if missing data materially affects this variable, block BUY_NOW and prefer WAIT_CONFIRMATION or HUMAN_REVIEW",
+        "recomputeWhenConfirmed": true
+      },
+      "confidencePenalty": 8,
+      "realTimeHandling": {
+        "updateCadence": "realtime_to_5m",
+        "realtimeValuePolicy": "estimated values must be flagged and later reconciled with confirmed close data",
+        "staleDataPolicy": "apply ConfidenceScore penalty and restrict aggressive ActionCodes",
+        "cachePolicy": "1s_to_5m_by_source"
+      },
+      "usedIn": [
+        "TrendScore"
+      ],
+      "usedInEngine": [
+        "OpportunityScore"
+      ],
+      "timeHorizon": [
+        "shortTerm",
+        "midTerm",
+        "longTerm"
+      ],
+      "calculationTiming": {
+        "realtime": true,
+        "intraday": false,
+        "endOfDayConfirmed": true,
+        "backtestReproducible": true
+      },
+      "dataFreshness": {
+        "required": "latest_available_tick_or_bar",
+        "maxStaleBeforePenalty": "5m",
+        "criticalStaleAction": "HUMAN_REVIEW"
+      },
+      "sourceReliability": {
+        "primary": "exchange_derived_high",
+        "scoreImpact": "contributes to ConfidenceScore and DataQualityScore",
+        "officialSourcePreferred": true
+      },
+      "regimeAdjustment": {
+        "strongUptrend": "relax ordinary overheat penalties and reward continuation if risk gates are clear",
+        "sideways": "prioritize range boundaries, false breakout risk, and confirmation",
+        "strongDowntrend": "increase risk penalties and require stronger confirmation",
+        "highVolatility": "increase slippage, spread, and false signal penalties"
+      },
+      "stockTypeAdjustment": {
+        "largeCap": "increase flow and macro relevance; reduce orderbook fragility weight",
+        "smallCap": "increase liquidity, spread, and fake liquidity penalties",
+        "theme": "increase narrative, volume, and crowding sensitivity; reduce pure financial weight",
+        "lowLiquidity": "prioritize liquidity risk and execution gates",
+        "ipoOrEventStock": "require wider thresholds and higher sample-size caution"
+      },
+      "thresholdOptimization": {
+        "initial": {
+          "lo": 35,
+          "mid": 65,
+          "hi": 80
+        },
+        "optimized": {
+          "lo": null,
+          "mid": null,
+          "hi": null,
+          "status": "pending_backtest"
+        },
+        "thresholdQualityScoreInputs": [
+          "winRate",
+          "expectedReturn",
+          "profitLossRatio",
+          "maxDrawdownControl",
+          "signalFrequency",
+          "regimeStability"
+        ],
+        "selectionRule": "choose highest ThresholdQualityScore with acceptable MDD, enough signal frequency, and stable regime performance"
+      },
+      "validationMetrics": {
+        "required": [
+          "signalCount",
+          "averageReturn",
+          "medianReturn",
+          "winRate",
+          "expectedValue",
+          "profitFactor",
+          "maxDrawdown",
+          "falseSignalRate",
+          "actionSuccessRate"
+        ],
+        "regimeBreakdown": true,
+        "stockTypeBreakdown": true,
+        "costAdjustedReturn": true,
+        "walkForwardRequired": true,
+        "minimumSample": 100
+      },
+      "backtestLabels": [
+        "return_5d",
+        "return_20d"
+      ]
     },
     "trend_slope_score": {
+      "id": "trend_slope_score",
+      "name": "Trend Slope Score",
+      "koreanName": "?? ??? ??",
+      "category": "trend",
       "type": "score",
       "description": "Measures whether the primary moving average slope supports trend continuation.",
-      "inputs": ["ma20Current", "ma20Past"],
+      "inputs": [
+        "ma20Current",
+        "ma20Past"
+      ],
       "formula": "(ma20Current - ma20Past) / ma20Past",
       "normalization": "slope_to_score",
-      "scoreBands": ["downtrend:0-35", "flat:36-60", "uptrend:61-100"],
-      "scoreGroup": ["TrendScore"],
+      "unit": "0_100_score",
+      "direction": "higher_is_better",
+      "scoreBands": [
+        "downtrend:0-35",
+        "flat:36-60",
+        "uptrend:61-100"
+      ],
       "thresholdRef": null,
-      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
-      "backtestLabels": ["return_10d", "target_before_stop_label"]
+      "missingPolicy": {
+        "fallback": null,
+        "fallbackLogic": "use neutral value when no reliable proxy exists; use documented proxy when available",
+        "neutralValue": 50,
+        "defaultScore": 50,
+        "confidencePenalty": 8,
+        "actionRestriction": "if missing data materially affects this variable, block BUY_NOW and prefer WAIT_CONFIRMATION or HUMAN_REVIEW",
+        "recomputeWhenConfirmed": true
+      },
+      "confidencePenalty": 8,
+      "realTimeHandling": {
+        "updateCadence": "realtime_to_5m",
+        "realtimeValuePolicy": "estimated values must be flagged and later reconciled with confirmed close data",
+        "staleDataPolicy": "apply ConfidenceScore penalty and restrict aggressive ActionCodes",
+        "cachePolicy": "1s_to_5m_by_source"
+      },
+      "usedIn": [
+        "TrendScore"
+      ],
+      "usedInEngine": [
+        "OpportunityScore"
+      ],
+      "timeHorizon": [
+        "shortTerm",
+        "midTerm",
+        "longTerm"
+      ],
+      "calculationTiming": {
+        "realtime": true,
+        "intraday": false,
+        "endOfDayConfirmed": true,
+        "backtestReproducible": true
+      },
+      "dataFreshness": {
+        "required": "latest_available_tick_or_bar",
+        "maxStaleBeforePenalty": "5m",
+        "criticalStaleAction": "HUMAN_REVIEW"
+      },
+      "sourceReliability": {
+        "primary": "exchange_derived_high",
+        "scoreImpact": "contributes to ConfidenceScore and DataQualityScore",
+        "officialSourcePreferred": true
+      },
+      "regimeAdjustment": {
+        "strongUptrend": "relax ordinary overheat penalties and reward continuation if risk gates are clear",
+        "sideways": "prioritize range boundaries, false breakout risk, and confirmation",
+        "strongDowntrend": "increase risk penalties and require stronger confirmation",
+        "highVolatility": "increase slippage, spread, and false signal penalties"
+      },
+      "stockTypeAdjustment": {
+        "largeCap": "increase flow and macro relevance; reduce orderbook fragility weight",
+        "smallCap": "increase liquidity, spread, and fake liquidity penalties",
+        "theme": "increase narrative, volume, and crowding sensitivity; reduce pure financial weight",
+        "lowLiquidity": "prioritize liquidity risk and execution gates",
+        "ipoOrEventStock": "require wider thresholds and higher sample-size caution"
+      },
+      "thresholdOptimization": {
+        "initial": {
+          "lo": 35,
+          "mid": 65,
+          "hi": 80
+        },
+        "optimized": {
+          "lo": null,
+          "mid": null,
+          "hi": null,
+          "status": "pending_backtest"
+        },
+        "thresholdQualityScoreInputs": [
+          "winRate",
+          "expectedReturn",
+          "profitLossRatio",
+          "maxDrawdownControl",
+          "signalFrequency",
+          "regimeStability"
+        ],
+        "selectionRule": "choose highest ThresholdQualityScore with acceptable MDD, enough signal frequency, and stable regime performance"
+      },
+      "validationMetrics": {
+        "required": [
+          "signalCount",
+          "averageReturn",
+          "medianReturn",
+          "winRate",
+          "expectedValue",
+          "profitFactor",
+          "maxDrawdown",
+          "falseSignalRate",
+          "actionSuccessRate"
+        ],
+        "regimeBreakdown": true,
+        "stockTypeBreakdown": true,
+        "costAdjustedReturn": true,
+        "walkForwardRequired": true,
+        "minimumSample": 100
+      },
+      "backtestLabels": [
+        "return_10d",
+        "target_before_stop_label"
+      ]
     },
     "trend_breakdown_risk": {
+      "id": "trend_breakdown_risk",
+      "name": "Trend Breakdown Risk",
+      "koreanName": "?? ?? ??",
+      "category": "trend",
       "type": "risk",
       "description": "Estimates risk of trend failure from moving average loss and weak close structure.",
-      "inputs": ["close", "ma20", "ma60", "closePositionScore"],
+      "inputs": [
+        "close",
+        "ma20",
+        "ma60",
+        "closePositionScore"
+      ],
       "formula": "risk_if(close < ma20 and closePositionScore < 35) + risk_if(close < ma60)",
       "normalization": "risk_clip_0_100",
-      "scoreBands": ["low:0-30", "warning:31-60", "critical:61-100"],
-      "scoreGroup": ["TrendScore", "RiskScore"],
+      "unit": "0_100_risk_score",
+      "direction": "higher_is_worse",
+      "scoreBands": [
+        "low:0-30",
+        "warning:31-60",
+        "critical:61-100"
+      ],
       "thresholdRef": "risk-thresholds.trend_breakdown_risk",
-      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
-      "backtestLabels": ["stop_loss_hit_label", "max_drawdown_5d"]
+      "missingPolicy": {
+        "fallback": null,
+        "fallbackLogic": "use neutral value when no reliable proxy exists; use documented proxy when available",
+        "neutralValue": 50,
+        "defaultScore": 50,
+        "confidencePenalty": 10,
+        "actionRestriction": "if missing data materially affects this variable, block BUY_NOW and prefer WAIT_CONFIRMATION or HUMAN_REVIEW",
+        "recomputeWhenConfirmed": true
+      },
+      "confidencePenalty": 10,
+      "realTimeHandling": {
+        "updateCadence": "realtime_to_5m",
+        "realtimeValuePolicy": "estimated values must be flagged and later reconciled with confirmed close data",
+        "staleDataPolicy": "apply ConfidenceScore penalty and restrict aggressive ActionCodes",
+        "cachePolicy": "1s_to_5m_by_source"
+      },
+      "usedIn": [
+        "TrendScore",
+        "RiskScore"
+      ],
+      "usedInEngine": [
+        "RiskScore"
+      ],
+      "timeHorizon": [
+        "shortTerm",
+        "midTerm",
+        "longTerm"
+      ],
+      "calculationTiming": {
+        "realtime": true,
+        "intraday": false,
+        "endOfDayConfirmed": true,
+        "backtestReproducible": true
+      },
+      "dataFreshness": {
+        "required": "latest_available_tick_or_bar",
+        "maxStaleBeforePenalty": "5m",
+        "criticalStaleAction": "HUMAN_REVIEW"
+      },
+      "sourceReliability": {
+        "primary": "exchange_derived_high",
+        "scoreImpact": "contributes to ConfidenceScore and DataQualityScore",
+        "officialSourcePreferred": true
+      },
+      "regimeAdjustment": {
+        "strongUptrend": "relax ordinary overheat penalties and reward continuation if risk gates are clear",
+        "sideways": "prioritize range boundaries, false breakout risk, and confirmation",
+        "strongDowntrend": "increase risk penalties and require stronger confirmation",
+        "highVolatility": "increase slippage, spread, and false signal penalties"
+      },
+      "stockTypeAdjustment": {
+        "largeCap": "increase flow and macro relevance; reduce orderbook fragility weight",
+        "smallCap": "increase liquidity, spread, and fake liquidity penalties",
+        "theme": "increase narrative, volume, and crowding sensitivity; reduce pure financial weight",
+        "lowLiquidity": "prioritize liquidity risk and execution gates",
+        "ipoOrEventStock": "require wider thresholds and higher sample-size caution"
+      },
+      "thresholdOptimization": {
+        "initial": {
+          "lo": 35,
+          "mid": 60,
+          "hi": 85
+        },
+        "optimized": {
+          "lo": null,
+          "mid": null,
+          "hi": null,
+          "status": "pending_backtest"
+        },
+        "thresholdQualityScoreInputs": [
+          "winRate",
+          "expectedReturn",
+          "profitLossRatio",
+          "maxDrawdownControl",
+          "signalFrequency",
+          "regimeStability"
+        ],
+        "selectionRule": "choose highest ThresholdQualityScore with acceptable MDD, enough signal frequency, and stable regime performance"
+      },
+      "validationMetrics": {
+        "required": [
+          "signalCount",
+          "averageReturn",
+          "medianReturn",
+          "winRate",
+          "expectedValue",
+          "profitFactor",
+          "maxDrawdown",
+          "falseSignalRate",
+          "actionSuccessRate"
+        ],
+        "regimeBreakdown": true,
+        "stockTypeBreakdown": true,
+        "costAdjustedReturn": true,
+        "walkForwardRequired": true,
+        "minimumSample": 100
+      },
+      "backtestLabels": [
+        "stop_loss_hit_label",
+        "max_drawdown_5d"
+      ]
     }
   }
 }

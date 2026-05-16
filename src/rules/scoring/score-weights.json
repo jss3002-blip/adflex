@@ -1,52 +1,99 @@
 {
   "domain": "score-weights",
-  "description": "Representative weights for OpportunityScore, RiskScore, ConfidenceScore, and FinalScore aggregation.",
+  "schemaVersion": "stockai.rules.scoring.v2",
+  "description": "Weights and formulas for OpportunityScore, RiskScore, ConfidenceScore, ShortTermScore, MidTermScore, LongTermScore, and FinalScore.",
   "scores": {
     "OpportunityScore": {
-      "weights": {
-        "PriceStateScore": 0.12,
-        "TrendScore": 0.14,
-        "VWAPScore": 0.1,
-        "BreakoutScore": 0.16,
-        "VolumeScore": 0.12,
+      "formula": "weighted average of positive state components",
+      "components": {
+        "TechnicalScore": 0.18,
+        "VolumeScore": 0.14,
+        "VWAPScore": 0.14,
+        "BreakoutScore": 0.12,
         "FlowScore": 0.1,
-        "SectorScore": 0.08,
+        "RelativeStrengthScore": 0.1,
         "NewsDisclosureScore": 0.08,
-        "FinancialScore": 0.06,
-        "SentimentScore": 0.04
+        "SectorScore": 0.06,
+        "RegimeFitScore": 0.04,
+        "NarrativeScore": 0.04
       }
     },
     "RiskScore": {
-      "weights": {
-        "RiskScore": 0.32,
-        "FinancialScore": 0.16,
-        "OrderbookScore": 0.12,
-        "MacroScore": 0.1,
-        "SentimentScore": 0.1,
-        "BreakoutScore": 0.08,
-        "VolumeScore": 0.06,
-        "ProgramScore": 0.06
+      "formula": "weighted average of independent downside risks",
+      "components": {
+        "StructuralRisk": 0.18,
+        "LiquidityRisk": 0.15,
+        "FinancialRisk": 0.14,
+        "DisclosureRisk": 0.12,
+        "VolatilityRisk": 0.1,
+        "VWAPBreakRisk": 0.1,
+        "FalseBreakoutRisk": 0.08,
+        "FlowCollapseRisk": 0.06,
+        "ThemeDecayRisk": 0.04,
+        "OvernightRisk": 0.03
       }
     },
     "ConfidenceScore": {
-      "weights": {
-        "ConfidenceScore": 0.28,
-        "VolumeScore": 0.14,
-        "FlowScore": 0.14,
-        "TrendScore": 0.12,
-        "SectorScore": 0.1,
-        "NewsDisclosureScore": 0.1,
-        "OrderbookScore": 0.06,
-        "FinancialScore": 0.06
+      "formula": "data quality and validation reliability",
+      "components": {
+        "DataQualityScore": 0.25,
+        "BacktestReliability": 0.2,
+        "SignalConsistency": 0.15,
+        "RegimeConsistency": 0.15,
+        "SampleSizeScore": 0.1,
+        "CrossValidationScore": 0.1,
+        "RealTimeDataFreshness": 0.05
       }
     },
-    "FinalScore": {
-      "formula": "OpportunityScore * 0.55 + ConfidenceScore * 0.25 - RiskScore * 0.2",
-      "weights": {
-        "OpportunityScore": 0.55,
-        "ConfidenceScore": 0.25,
-        "RiskScore": -0.2
+    "ShortTermScore": {
+      "formula": "0.22*PriceVWAPClose + 0.12*OpenGapORB + 0.20*VolumeExecutionOrderbook + 0.15*FlowProgram + 0.10*NewsEventReaction + 0.06*DerivativeETFShort + 0.05*SectorBreadth + 0.05*Technical + 0.03*Sentiment + 0.02*Backtest",
+      "actionBands": {
+        "strong": 85,
+        "pullback": 75,
+        "confirmation": 65,
+        "watchlist": 50,
+        "riskReduction": 40
       }
+    },
+    "MidTermScore": {
+      "formula": "0.22*PriceTrend + 0.12*VolumePersistence + 0.18*FlowConsistency + 0.08*NewsSustainability + 0.15*FinancialEarnings + 0.10*SectorIndustry + 0.08*MacroMicro + 0.05*TechnicalVolatility + 0.02*Sentiment"
+    },
+    "LongTermScore": {
+      "formula": "0.28*FinancialStability + 0.14*IndustryCycle + 0.15*MacroMicro + 0.10*LongFlow + 0.10*LongPriceTrend + 0.08*CompetitionMargin + 0.05*DisclosureLegal + 0.05*MarketHealth + 0.05*Backtest"
+    },
+    "FinalScore": {
+      "formula": "OpportunityScore - (RiskScore * RiskWeightByMarketRegime[MarketRegime]) + ConfidenceAdjustment, then apply Gate ScoreCap",
+      "confidenceAdjustment": {
+        "gte80": 3,
+        "gte60": 0,
+        "gte40": -5,
+        "lt40": -15
+      }
+    }
+  },
+  "RiskWeightByMarketRegime": {
+    "STRONG_UPTREND": 0.25,
+    "WEAK_UPTREND": 0.3,
+    "SIDEWAYS": 0.35,
+    "WEAK_DOWNTREND": 0.45,
+    "STRONG_DOWNTREND": 0.6,
+    "HIGH_VOLATILITY": 0.5,
+    "EVENT_MARKET": 0.45,
+    "LIQUIDITY_MARKET": 0.25,
+    "TIGHTENING_MARKET": 0.55
+  },
+  "stockTypeAdjustments": {
+    "LARGE_CAP": {
+      "liquidityPenaltyMultiplier": 0.8,
+      "flowWeightMultiplier": 1.15
+    },
+    "THEME": {
+      "narrativeWeightMultiplier": 1.25,
+      "riskGateMultiplier": 1.15
+    },
+    "LOW_LIQUIDITY": {
+      "liquidityPenaltyMultiplier": 1.6,
+      "buyActionRestriction": "BUY_NOW_blocked"
     }
   }
 }
