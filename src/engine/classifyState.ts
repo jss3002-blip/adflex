@@ -82,6 +82,14 @@ function lowScore(value: number | undefined, max: number): boolean {
   return isFiniteNumber(value) && value <= max;
 }
 
+function capScore(value: number, cap: number): number {
+  return Math.min(clampScore(value), cap);
+}
+
+function applyConfidenceCap(score: number, cap: number): number {
+  return capScore(score, cap);
+}
+
 export function classifyStrongUptrend(input: StockStateClassificationInput): number {
   let score = 0;
   score += addIf(input.ohlcScore >= 75, 25);
@@ -139,19 +147,29 @@ export function classifyShortTermOverheated(input: StockStateClassificationInput
 }
 
 export function classifyVwapSupportHolding(input: StockStateClassificationInput): number {
-  let score = 0;
-  score += addIf(input.isAboveVwap === true, 25);
+  let score = 35;
+  score += addIf(input.isAboveVwap === true, 14);
   score += addIf(
     input.isNearVwap === true ||
       (isFiniteNumber(input.vwapDistancePercent) &&
         input.vwapDistancePercent >= 0 &&
         input.vwapDistancePercent <= 3),
-    20,
+    12,
   );
-  score += addIf(hasScore(input.closePositionScore, 50), 20);
-  score += addIf(!hasScore(input.vwapRiskScore, 55), 20);
-  score += addIf(input.riskScore < 65, 15);
-  return clampScore(score);
+  score += addIf(hasScore(input.closePositionScore, 50), 10);
+  score += addIf(hasScore(input.closePositionScore, 70), 6);
+  score += addIf(!hasScore(input.vwapRiskScore, 55), 10);
+  score += addIf(input.riskScore < 65, 8);
+  score += addIf(input.riskScore < 45, 5);
+  score += addIf(input.vwapScore >= 60, 6);
+  score += addIf(input.volumeScore >= 65, 6);
+
+  if (!hasExceptionalVwapSupport(input)) {
+    if (input.vwapScore < 65 || input.volumeScore < 65) return capScore(score, 84);
+    return capScore(score, 88);
+  }
+
+  return capScore(score, 94);
 }
 
 export function classifyVwapBreakdownWarning(input: StockStateClassificationInput): number {
@@ -259,7 +277,7 @@ export function classifyWatchlist(input: StockStateClassificationInput): number 
 export function classifyState(
   input: StockStateClassificationInput,
 ): StockStateClassificationResult {
-  const candidates: StateCandidate[] = [
+  const rawCandidates: StateCandidate[] = [
     { state: "STRONG_UPTREND", score: classifyStrongUptrend(input) },
     { state: "BREAKOUT_ATTEMPT", score: classifyBreakoutAttempt(input) },
     { state: "TRUE_BREAKOUT_CANDIDATE", score: classifyTrueBreakoutCandidate(input) },
@@ -276,6 +294,11 @@ export function classifyState(
     { state: "WATCHLIST", score: classifyWatchlist(input) },
   ];
 
+  const candidates: StateCandidate[] = rawCandidates.map((candidate) => ({
+    state: candidate.state,
+    score: applyStateScoreCap(candidate.state, candidate.score, input),
+  }));
+
   const sorted = [...candidates].sort((a, b) => priorityAdjustedScore(b, input) - priorityAdjustedScore(a, input));
   const primary = sorted[0] ? sorted[0] : { state: "SIDEWAYS_NEUTRAL" as const, score: 50 };
   const secondaryStates = sorted
@@ -284,7 +307,7 @@ export function classifyState(
     .map((candidate) => candidate.state);
 
   const secondScore = sorted[1] ? sorted[1].score : 0;
-  const confidenceScore = calculateClassificationConfidence(primary.score, secondScore);
+  const confidenceScore = calculateClassificationConfidence(primary.state, primary.score, secondScore);
   const riskAdjustedScore = clampScore(
     input.ohlcScore * 0.3 + input.volumeScore * 0.25 + input.vwapScore * 0.25 - input.riskScore * 0.2,
   );
@@ -334,13 +357,108 @@ function priorityAdjustedScore(
   return adjusted;
 }
 
-function calculateClassificationConfidence(topScore: number, secondScore: number): number {
+function calculateClassificationConfidence(
+  primaryState: StockStateType,
+  topScore: number,
+  secondScore: number,
+): number {
   const gap = topScore - secondScore;
+  let confidence = 45;
 
-  if (topScore >= 75 && gap >= 15) return 85;
-  if (topScore >= 65 && gap >= 8) return 70;
-  if (topScore >= 55) return 58;
-  return 45;
+  if (topScore >= 75 && gap >= 15) confidence = 82;
+  else if (topScore >= 65 && gap >= 8) confidence = 68;
+  else if (topScore >= 55) confidence = 56;
+
+  if (isMonitorOrNeutralState(primaryState)) confidence = applyConfidenceCap(confidence, 72);
+  if (gap < 8) confidence = applyConfidenceCap(confidence, 60);
+  return clampScore(confidence);
+}
+
+function applyStateScoreCap(
+  state: StockStateType,
+  score: number,
+  input: StockStateClassificationInput,
+): number {
+  let capped = clampScore(score);
+
+  if (state === "VWAP_SUPPORT_HOLDING" && !hasExceptionalVwapSupport(input)) {
+    capped = capScore(capped, input.vwapScore < 65 || input.volumeScore < 65 ? 84 : 88);
+  }
+
+  if (state === "WATCHLIST") capped = capScore(capped, 76);
+  if (state === "PULLBACK_SETUP") capped = capScore(capped, 84);
+  if (state === "SIDEWAYS_NEUTRAL") capped = capScore(capped, 72);
+  if (state === "WEAK_PARTICIPATION") capped = capScore(capped, 86);
+
+  if (state === "BOTTOM_REBOUND_ATTEMPT" && !hasExceptionalBottomRebound(input)) {
+    capped = capScore(capped, 84);
+  }
+
+  if (isOptimisticState(state)) {
+    if (input.volumeScore < 65) capped = capScore(capped, 84);
+    if (input.riskScore >= 65) capped = capScore(capped, 78);
+    if (hasScore(input.distributionRiskScore, 60)) capped = capScore(capped, 82);
+    if (input.isAboveVwap === false) capped = capScore(capped, 80);
+  }
+
+  if (isRiskState(state) && !hasMultipleRiskConfirmations(input)) capped = capScore(capped, 94);
+
+  return capped;
+}
+
+function isMonitorOrNeutralState(state: StockStateType): boolean {
+  return [
+    "VWAP_SUPPORT_HOLDING",
+    "WATCHLIST",
+    "PULLBACK_SETUP",
+    "BOTTOM_REBOUND_ATTEMPT",
+    "SIDEWAYS_NEUTRAL",
+    "WEAK_PARTICIPATION",
+  ].includes(state);
+}
+
+function isOptimisticState(state: StockStateType): boolean {
+  return ["STRONG_UPTREND", "BREAKOUT_ATTEMPT", "TRUE_BREAKOUT_CANDIDATE"].includes(state);
+}
+
+function isRiskState(state: StockStateType): boolean {
+  return [
+    "FALSE_BREAKOUT_RISK",
+    "TREND_COLLAPSE_RISK",
+    "VWAP_BREAKDOWN_WARNING",
+    "HIGH_RISK_MOMENTUM",
+    "SHORT_TERM_OVERHEATED",
+  ].includes(state);
+}
+
+function hasExceptionalVwapSupport(input: StockStateClassificationInput): boolean {
+  return (
+    input.isAboveVwap === true &&
+    input.vwapScore >= 75 &&
+    input.volumeScore >= 70 &&
+    hasScore(input.closePositionScore, 70) &&
+    input.riskScore < 45 &&
+    isFiniteNumber(input.vwapDistancePercent) &&
+    input.vwapDistancePercent >= 0 &&
+    input.vwapDistancePercent <= 3
+  );
+}
+
+function hasExceptionalBottomRebound(input: StockStateClassificationInput): boolean {
+  return hasScore(input.lowerWickRatio, 40) && input.volumeScore >= 65 && input.riskScore < 60;
+}
+
+function hasMultipleRiskConfirmations(input: StockStateClassificationInput): boolean {
+  const confirmationCount = [
+    hasScore(input.distributionRiskScore, 75),
+    hasScore(input.vwapBreakdownRiskScore, 70),
+    hasScore(input.trendCollapseRiskScore, 70),
+    hasScore(input.volatilityRiskScore, 70),
+    hasScore(input.overheatingRiskScore, 75),
+    input.riskScore >= 80,
+  ].filter(Boolean).length;
+
+  return confirmationCount >= 2;
 }
 
 function buildSummary(state: StockStateType, input: StockStateClassificationInput): string {
@@ -410,7 +528,7 @@ function buildEvidence(
   }
 
   if (input.isAboveVwap === true) {
-    evidence.positive.push("VWAP 위에서 가격이 유지되어 단기 매수세 유지 가능성이 있습니다.");
+    evidence.positive.push("VWAP 위에서 가격이 유지되어 단기 수급 우위가 이어질 가능성이 있습니다.");
   }
 
   if (input.riskScore < 65) {

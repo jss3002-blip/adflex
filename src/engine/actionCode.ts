@@ -73,6 +73,16 @@ const riskActionCodes: StockActionCode[] = [
   "WEAK_PARTICIPATION_CHECK",
 ];
 
+const monitorActionCodes: StockActionCode[] = [
+  "WATCH_ONLY",
+  "WAIT_CONFIRMATION",
+  "BREAKOUT_MONITOR",
+  "TRUE_BREAKOUT_MONITOR",
+  "PULLBACK_MONITOR",
+  "VWAP_SUPPORT_MONITOR",
+  "NO_CLEAR_EDGE",
+];
+
 export function calculateActionScore(
   input: ActionCodeInput,
   actionCode: StockActionCode,
@@ -113,13 +123,21 @@ export function calculateActionScore(
   if (actionCode === "WEAK_PARTICIPATION_CHECK") {
     if (valueAtLeast(input.lowLiquidityOrWeakParticipationRiskScore, 65)) score += 18;
   }
+  if (actionCode === "VWAP_SUPPORT_MONITOR") {
+    score -= 8;
+    if (input.isAboveVwap === true) score += 6;
+    if (input.isNearVwap === true) score += 5;
+    if (input.riskScore < 65) score += 4;
+    if (input.vwapScore !== undefined && input.vwapScore < 65) score -= 6;
+    if (input.volumeScore !== undefined && input.volumeScore < 65) score -= 6;
+  }
   if (actionCode === "NO_CLEAR_EDGE") {
     score = 50;
     if (input.confidenceScore < 45) score += 22;
     if (input.riskAdjustedScore < 55) score += 12;
   }
 
-  return clampScore(score);
+  return applyActionScoreCap(score, input, actionCode);
 }
 
 export function determineUrgencyLevel(
@@ -128,7 +146,18 @@ export function determineUrgencyLevel(
   actionScore: number,
 ): ActionUrgencyLevel {
   const isRiskCode = riskActionCodes.includes(actionCode);
+  const isMonitorCode = monitorActionCodes.includes(actionCode);
+
   if ((isRiskCode && input.riskScore >= 80) || (isRiskCode && actionScore >= 85)) return "HIGH";
+  if (
+    isMonitorCode &&
+    input.riskScore < 50 &&
+    !(actionScore >= 90 && input.confidenceScore >= 70) &&
+    !hasElevatedRiskMetric(input)
+  ) {
+    if (actionScore >= 50) return "NORMAL";
+    return "LOW";
+  }
   if (input.riskScore >= 65 || actionScore >= 70) return "ELEVATED";
   if (actionScore >= 50) return "NORMAL";
   return "LOW";
@@ -356,4 +385,96 @@ function valueAtLeast(value: number | undefined, threshold: number): boolean {
 function valueOr(value: number | undefined, fallback: number): number {
   if (isFiniteNumber(value)) return value;
   return fallback;
+}
+
+function applyActionScoreCap(
+  rawScore: number,
+  input: ActionCodeInput,
+  actionCode: StockActionCode,
+): number {
+  let score = clampScore(rawScore);
+
+  if (actionCode === "WATCH_ONLY") score = Math.min(score, 72);
+  if (actionCode === "WAIT_CONFIRMATION") score = Math.min(score, 76);
+  if (actionCode === "PULLBACK_MONITOR") score = Math.min(score, 84);
+  if (actionCode === "NO_CLEAR_EDGE") score = Math.min(score, 78);
+
+  if (actionCode === "BREAKOUT_MONITOR" && !hasStrongBreakoutConfirmation(input)) {
+    score = Math.min(score, 86);
+  }
+
+  if (actionCode === "TRUE_BREAKOUT_MONITOR" && !hasStrongBreakoutConfirmation(input)) {
+    score = Math.min(score, 90);
+  }
+
+  if (actionCode === "VWAP_SUPPORT_MONITOR" && !hasExceptionalVwapSupportMonitor(input)) {
+    if (valueOr(input.vwapScore, 50) < 65 || valueOr(input.volumeScore, 50) < 65) {
+      score = Math.min(score, 82);
+    } else {
+      score = Math.min(score, 85);
+    }
+  }
+
+  if (monitorActionCodes.includes(actionCode) && !hasExceptionalMonitorConfirmation(input)) {
+    score = Math.min(score, 88);
+  }
+
+  if (riskActionCodes.includes(actionCode) && score >= 95 && !hasAlignedRiskConfirmation(input)) {
+    score = 94;
+  }
+
+  if (score >= 100 && !hasExceptionalMonitorConfirmation(input) && !hasAlignedRiskConfirmation(input)) {
+    score = 95;
+  }
+
+  return clampScore(score);
+}
+
+function hasStrongBreakoutConfirmation(input: ActionCodeInput): boolean {
+  return (
+    valueOr(input.vwapScore, 50) >= 70 &&
+    valueOr(input.volumeScore, 50) >= 70 &&
+    input.confidenceScore >= 70 &&
+    input.riskScore < 55 &&
+    input.isAboveVwap === true &&
+    !valueAtLeast(input.distributionRiskScore, 60)
+  );
+}
+
+function hasExceptionalVwapSupportMonitor(input: ActionCodeInput): boolean {
+  return (
+    input.isAboveVwap === true &&
+    valueOr(input.vwapScore, 50) >= 75 &&
+    valueOr(input.volumeScore, 50) >= 70 &&
+    input.confidenceScore >= 70 &&
+    input.riskScore < 45
+  );
+}
+
+function hasExceptionalMonitorConfirmation(input: ActionCodeInput): boolean {
+  return hasStrongBreakoutConfirmation(input) || hasExceptionalVwapSupportMonitor(input);
+}
+
+function hasAlignedRiskConfirmation(input: ActionCodeInput): boolean {
+  const confirmationCount = [
+    input.riskScore >= 80,
+    valueAtLeast(input.distributionRiskScore, 75),
+    valueAtLeast(input.vwapBreakdownRiskScore, 70),
+    valueAtLeast(input.trendCollapseRiskScore, 70),
+    valueAtLeast(input.volatilityRiskScore, 70),
+    valueAtLeast(input.overheatingRiskScore, 75),
+    valueAtLeast(input.lowLiquidityOrWeakParticipationRiskScore, 75),
+  ].filter(Boolean).length;
+
+  return confirmationCount >= 2;
+}
+
+function hasElevatedRiskMetric(input: ActionCodeInput): boolean {
+  return (
+    valueAtLeast(input.distributionRiskScore, 65) ||
+    valueAtLeast(input.vwapBreakdownRiskScore, 65) ||
+    valueAtLeast(input.trendCollapseRiskScore, 65) ||
+    valueAtLeast(input.volatilityRiskScore, 70) ||
+    valueAtLeast(input.overheatingRiskScore, 70)
+  );
 }

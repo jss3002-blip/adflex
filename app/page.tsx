@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 type IconName =
   | "activity"
   | "arrow"
@@ -75,9 +79,9 @@ const features = [
 ] as const;
 
 const recommendations = [
-  { ticker: "NVDA", name: "엔비디아", score: 92, signal: "강한 매수", change: "+3.8%" },
+  { ticker: "NVDA", name: "엔비디아", score: 92, signal: "강한 흐름", change: "+3.8%" },
   { ticker: "TSLA", name: "테슬라", score: 78, signal: "관망 우세", change: "+1.2%" },
-  { ticker: "AAPL", name: "애플", score: 84, signal: "매수 유지", change: "+2.1%" },
+  { ticker: "AAPL", name: "애플", score: 84, signal: "흐름 유지", change: "+2.1%" },
 ];
 
 const sentimentItems = [
@@ -86,7 +90,67 @@ const sentimentItems = [
   { label: "변동성 예측", value: "중간 리스크", width: "54%" },
 ];
 
+type StockAnalysisViewResult = {
+  finalScore: number;
+  finalGrade: string;
+  state: {
+    primaryState: string;
+    stateScore: number;
+    confidenceScore: number;
+  };
+  action: {
+    actionCode: string;
+    urgencyLevel: string;
+    actionScore: number;
+  };
+  risk: {
+    riskScore: number;
+  };
+  summary: string;
+  warnings: string[];
+  evidence: {
+    positive: string[];
+    neutral: string[];
+    negative: string[];
+  };
+};
+
+type StockAnalysisApiResponse = {
+  success: boolean;
+  data?: StockAnalysisViewResult;
+  error?: string;
+  detail?: string;
+};
+
 export default function Home() {
+  const [analysisResult, setAnalysisResult] = useState<StockAnalysisViewResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
+
+  async function handleAnalyzeStock() {
+    setIsAnalyzing(true);
+    setAnalysisError("");
+
+    try {
+      const response = await fetch("/api/analyze-stock", {
+        method: "GET",
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as StockAnalysisApiResponse;
+
+      if (!response.ok || !payload.success || !payload.data) {
+        setAnalysisError(payload.detail || payload.error || "분석 결과를 불러오지 못했습니다.");
+        return;
+      }
+
+      setAnalysisResult(payload.data);
+    } catch (error) {
+      setAnalysisError(error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
+
   return (
     <main className="relative min-h-full overflow-hidden bg-[#050508] text-white">
       <div
@@ -152,13 +216,15 @@ export default function Home() {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
-            <a
-              href="#dashboard-preview"
+            <button
+              type="button"
+              onClick={handleAnalyzeStock}
+              disabled={isAnalyzing}
               className="group inline-flex h-13 items-center justify-center gap-2 rounded-2xl bg-white px-6 text-sm font-semibold text-black shadow-[0_24px_70px_-38px_rgba(255,255,255,0.75)] transition hover:-translate-y-0.5 hover:bg-cyan-100"
             >
-              AI 주식 분석하기
+              {isAnalyzing ? "분석 중..." : "AI 주식 분석하기"}
               <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-0.5" />
-            </a>
+            </button>
             <a
               href="#engine"
               className="inline-flex h-13 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-6 text-sm font-semibold text-white/80 backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.07] hover:text-white"
@@ -167,6 +233,15 @@ export default function Home() {
               <Icon name="gauge" className="h-4 w-4" />
             </a>
           </div>
+
+          {analysisError ? (
+            <div className="rounded-3xl border border-rose-300/20 bg-rose-400/[0.08] p-5 text-sm text-rose-100 shadow-[0_24px_80px_-58px_rgba(244,63,94,0.85)] backdrop-blur-xl">
+              <p className="font-semibold">분석 중 오류가 발생했습니다.</p>
+              <p className="mt-2 text-rose-100/70">{analysisError}</p>
+            </div>
+          ) : null}
+
+          {analysisResult ? <AnalysisResultCard result={analysisResult} /> : null}
         </div>
 
         <div className="relative">
@@ -254,7 +329,7 @@ export default function Home() {
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">AI가 시장의 흐름을 요약합니다</h2>
           </div>
           <p className="max-w-xl text-sm leading-7 text-white/52">
-            실제 API 연결 전 UI 프로토타입입니다. 추천, 예측, 심리, 거래량, 변동성, 뉴스 감성 영역을 한 화면에서
+            실제 API 연결 전 UI 프로토타입입니다. 관심 종목, 예측, 심리, 거래량, 변동성, 뉴스 감성 영역을 한 화면에서
             확인하는 경험을 설계했습니다.
           </p>
         </div>
@@ -264,7 +339,7 @@ export default function Home() {
             <div className="mb-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Icon name="candle" className="h-5 w-5 text-cyan-300" />
-                <h3 className="font-semibold">AI 추천 종목</h3>
+                <h3 className="font-semibold">AI 관심 종목</h3>
               </div>
               <span className="rounded-full bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100/70">업데이트 대기</span>
             </div>
@@ -378,7 +453,7 @@ export default function Home() {
               </h2>
               <p className="mt-5 text-base leading-8 text-white/58">
                 StockAI 엔진은 가격, 거래량, 변동성, 뉴스, 수급 흐름, 리스크 신호를 하나의 AI 점수로 통합합니다.
-                단순한 차트 요약이 아니라 투자 판단에 필요한 방향성, 위험 구간, 매수·관망 신호를 함께 제공합니다.
+                단순한 차트 요약이 아니라 투자 판단에 필요한 방향성, 위험 구간, 관찰 지표를 함께 제공합니다.
               </p>
             </div>
 
@@ -402,4 +477,105 @@ export default function Home() {
       </section>
     </main>
   );
+}
+
+function AnalysisResultCard({ result }: { result: StockAnalysisViewResult }) {
+  const scoreItems = [
+    { label: "종합 점수", value: formatScore(result.finalScore), accent: "text-cyan-200" },
+    { label: "상태 점수", value: formatScore(result.state.stateScore), accent: "text-violet-200" },
+    { label: "신뢰도", value: formatScore(result.state.confidenceScore), accent: "text-emerald-200" },
+    { label: "리스크 점수", value: formatScore(result.risk.riskScore), accent: "text-amber-200" },
+  ];
+
+  return (
+    <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_90px_-64px_rgba(34,211,238,0.9)] backdrop-blur-2xl">
+      <div className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-cyan-200/80">분석 결과</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight">{result.finalGrade}</h2>
+        </div>
+        <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100/80">
+          {result.action.urgencyLevel}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {scoreItems.map((item) => (
+          <div key={item.label} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <p className="text-xs text-white/45">{item.label}</p>
+            <p className={`mt-2 text-2xl font-semibold ${item.accent}`}>{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <InfoPill label="상태 분류" value={result.state.primaryState} />
+        <InfoPill label="대응 라벨" value={result.action.actionCode} />
+        <InfoPill label="대응 점수" value={formatScore(result.action.actionScore)} />
+        <InfoPill label="확인 필요" value={`${result.warnings.length}건`} />
+      </div>
+
+      <p className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-7 text-white/66">
+        {result.summary}
+      </p>
+
+      {result.warnings.length > 0 ? (
+        <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4">
+          <p className="text-sm font-semibold text-amber-100">확인 필요</p>
+          <ul className="mt-3 space-y-2 text-xs leading-6 text-amber-50/75">
+            {result.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        <EvidenceList title="긍정 지표" items={result.evidence.positive} tone="cyan" />
+        <EvidenceList title="중립 지표" items={result.evidence.neutral} tone="violet" />
+        <EvidenceList title="주의 지표" items={result.evidence.negative} tone="rose" />
+      </div>
+    </div>
+  );
+}
+
+function InfoPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+      <p className="text-xs text-white/42">{label}</p>
+      <p className="mt-2 break-all text-sm font-semibold text-white/82">{value}</p>
+    </div>
+  );
+}
+
+function EvidenceList({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  tone: "cyan" | "violet" | "rose";
+}) {
+  const toneClass =
+    tone === "cyan" ? "text-cyan-100 border-cyan-300/15 bg-cyan-300/[0.05]" : tone === "violet" ? "text-violet-100 border-violet-300/15 bg-violet-300/[0.05]" : "text-rose-100 border-rose-300/15 bg-rose-300/[0.05]";
+
+  return (
+    <div className={`rounded-2xl border p-4 ${toneClass}`}>
+      <p className="text-sm font-semibold">{title}</p>
+      {items.length > 0 ? (
+        <ul className="mt-3 space-y-2 text-xs leading-6 text-white/62">
+          {items.slice(0, 3).map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-xs text-white/45">표시할 항목이 없습니다.</p>
+      )}
+    </div>
+  );
+}
+
+function formatScore(value: number) {
+  return Number.isFinite(value) ? value.toFixed(0) : "-";
 }
