@@ -7,7 +7,7 @@
     "news_impact_score": {
       "id": "news_impact_score",
       "name": "News Impact Score",
-      "koreanName": "?? ?? ??",
+      "koreanName": "뉴스 영향 점수",
       "category": "news_disclosure",
       "type": "score",
       "description": "Scores likely price impact from recent news intensity, freshness, and relevance.",
@@ -131,7 +131,7 @@
     "disclosure_reliability_score": {
       "id": "disclosure_reliability_score",
       "name": "Disclosure Reliability Score",
-      "koreanName": "?? ??? ??",
+      "koreanName": "공시 신뢰도 점수",
       "category": "news_disclosure",
       "type": "score",
       "description": "Scores quality and credibility of disclosures based on source and historical follow-through.",
@@ -255,7 +255,7 @@
     "sell_the_news_risk": {
       "id": "sell_the_news_risk",
       "name": "Sell The News Risk",
-      "koreanName": "?? ?? ??",
+      "koreanName": "재료 소멸 위험",
       "category": "news_disclosure",
       "type": "risk",
       "description": "Measures risk that good news is already priced in and followed by selling.",

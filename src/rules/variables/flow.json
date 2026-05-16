@@ -7,7 +7,7 @@
     "foreign_flow_score": {
       "id": "foreign_flow_score",
       "name": "Foreign Flow Score",
-      "koreanName": "??? ?? ??",
+      "koreanName": "외국인 수급 점수",
       "category": "flow",
       "type": "score",
       "description": "Scores foreign investor net buying strength and persistence.",
@@ -129,7 +129,7 @@
     "institution_flow_score": {
       "id": "institution_flow_score",
       "name": "Institution Flow Score",
-      "koreanName": "?? ?? ??",
+      "koreanName": "기관 수급 점수",
       "category": "flow",
       "type": "score",
       "description": "Scores institutional accumulation or distribution pressure.",
@@ -251,7 +251,7 @@
     "retail_chasing_risk": {
       "id": "retail_chasing_risk",
       "name": "Retail Chasing Risk",
-      "koreanName": "?? ?? ?? ??",
+      "koreanName": "개인 추격 매수 위험",
       "category": "flow",
       "type": "risk",
       "description": "Estimates risk that late retail inflow is chasing an exhausted move.",

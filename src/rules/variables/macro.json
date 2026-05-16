@@ -7,7 +7,7 @@
     "interest_rate_risk_score": {
       "id": "interest_rate_risk_score",
       "name": "Interest Rate Risk Score",
-      "koreanName": "?? ?? ??",
+      "koreanName": "금리 위험 점수",
       "category": "macro",
       "type": "risk",
       "description": "Scores equity risk from rate changes and sensitivity of the stock or sector.",
@@ -130,7 +130,7 @@
     "fx_risk_score": {
       "id": "fx_risk_score",
       "name": "Fx Risk Score",
-      "koreanName": "?? ?? ??",
+      "koreanName": "환율 위험 점수",
       "category": "macro",
       "type": "risk",
       "description": "Scores FX pressure for export/import-sensitive stocks.",
@@ -253,7 +253,7 @@
     "macro_event_risk_score": {
       "id": "macro_event_risk_score",
       "name": "Macro Event Risk Score",
-      "koreanName": "?? ??? ?? ??",
+      "koreanName": "거시 이벤트 위험 점수",
       "category": "macro",
       "type": "risk",
       "description": "Scores scheduled macro event risk from timing and expected volatility.",

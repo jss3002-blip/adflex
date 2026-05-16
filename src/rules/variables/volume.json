@@ -7,7 +7,7 @@
     "volume_ratio_20d": {
       "id": "volume_ratio_20d",
       "name": "Volume Ratio 20d",
-      "koreanName": "20? ?? ?? ??? ??",
+      "koreanName": "20일 평균 대비 거래량 비율",
       "category": "volume",
       "type": "ratio",
       "description": "Compares current volume with the 20-day average volume.",
@@ -128,7 +128,7 @@
     "volume_persistence_score": {
       "id": "volume_persistence_score",
       "name": "Volume Persistence Score",
-      "koreanName": "??? ??? ??",
+      "koreanName": "거래량 지속성 점수",
       "category": "volume",
       "type": "score",
       "description": "Scores whether elevated volume persists across multiple bars or sessions.",
@@ -251,7 +251,7 @@
     "volume_climax_score": {
       "id": "volume_climax_score",
       "name": "Volume Climax Score",
-      "koreanName": "??? ????? ??",
+      "koreanName": "거래량 클라이맥스 점수",
       "category": "volume",
       "type": "risk",
       "description": "Detects exhaustion risk when volume spikes excessively into price extension.",

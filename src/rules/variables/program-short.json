@@ -7,7 +7,7 @@
     "program_flow_score": {
       "id": "program_flow_score",
       "name": "Program Flow Score",
-      "koreanName": "???? ?? ?? ??",
+      "koreanName": "프로그램 매매 수급 점수",
       "category": "program_short",
       "type": "score",
       "description": "Scores program trading support or pressure relative to trading value.",
@@ -128,7 +128,7 @@
     "program_sell_turnover_risk": {
       "id": "program_sell_turnover_risk",
       "name": "Program Sell Turnover Risk",
-      "koreanName": "???? ?? ?? ??",
+      "koreanName": "프로그램 매도 전환 위험",
       "category": "program_short",
       "type": "risk",
       "description": "Measures risk from heavy program sell turnover during weak price action.",
@@ -251,7 +251,7 @@
     "short_interest_change_score": {
       "id": "short_interest_change_score",
       "name": "Short Interest Change Score",
-      "koreanName": "??? ?? ?? ??",
+      "koreanName": "공매도 잔고 변화 점수",
       "category": "program_short",
       "type": "score",
       "description": "Scores whether short interest change creates squeeze potential or downside pressure.",

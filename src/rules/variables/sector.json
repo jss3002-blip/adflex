@@ -7,7 +7,7 @@
     "sector_relative_strength_score": {
       "id": "sector_relative_strength_score",
       "name": "Sector Relative Strength Score",
-      "koreanName": "?? ???? ??",
+      "koreanName": "섹터 상대강도 점수",
       "category": "sector",
       "type": "score",
       "description": "Scores stock sector performance relative to the broad market.",
@@ -130,7 +130,7 @@
     "sector_breadth_score": {
       "id": "sector_breadth_score",
       "name": "Sector Breadth Score",
-      "koreanName": "?? ???? ??",
+      "koreanName": "섹터 브레드스 점수",
       "category": "sector",
       "type": "score",
       "description": "Scores how many stocks inside the sector participate in the move.",
@@ -255,7 +255,7 @@
     "sector_rotation_score": {
       "id": "sector_rotation_score",
       "name": "Sector Rotation Score",
-      "koreanName": "?? ???? ??",
+      "koreanName": "섹터 로테이션 점수",
       "category": "sector",
       "type": "score",
       "description": "Scores whether capital is rotating into the sector from weaker themes.",

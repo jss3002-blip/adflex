@@ -7,7 +7,7 @@
     "debt_risk_score": {
       "id": "debt_risk_score",
       "name": "Debt Risk Score",
-      "koreanName": "?? ?? ??",
+      "koreanName": "부채 위험 점수",
       "category": "financial",
       "type": "risk",
       "description": "Scores balance sheet risk from leverage and interest coverage.",
@@ -130,7 +130,7 @@
     "financial_distress_risk": {
       "id": "financial_distress_risk",
       "name": "Financial Distress Risk",
-      "koreanName": "?? ?? ??",
+      "koreanName": "재무 부실 위험",
       "category": "financial",
       "type": "risk",
       "description": "Estimates broad financial distress risk using profitability, debt, liquidity, and audit flags.",
@@ -254,7 +254,7 @@
     "earnings_surprise_score": {
       "id": "earnings_surprise_score",
       "name": "Earnings Surprise Score",
-      "koreanName": "?? ????? ??",
+      "koreanName": "실적 서프라이즈 점수",
       "category": "financial",
       "type": "score",
       "description": "Scores positive or negative surprise relative to consensus and prior trend.",

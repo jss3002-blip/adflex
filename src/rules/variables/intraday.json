@@ -7,7 +7,7 @@
     "intraday_range_rate": {
       "id": "intraday_range_rate",
       "name": "Intraday Range Rate",
-      "koreanName": "?? ????",
+      "koreanName": "장중 변동폭률",
       "category": "intraday",
       "type": "ratio",
       "description": "Measures current intraday high-low range versus previous close.",
@@ -129,7 +129,7 @@
     "intraday_mtf_alignment_score": {
       "id": "intraday_mtf_alignment_score",
       "name": "Intraday Mtf Alignment Score",
-      "koreanName": "?? ??????? ?? ??",
+      "koreanName": "장중 멀티타임프레임 정렬 점수",
       "category": "intraday",
       "type": "score",
       "description": "Scores alignment across 1-minute, 5-minute, and daily structures.",
@@ -251,7 +251,7 @@
     "intraday_reversal_probability": {
       "id": "intraday_reversal_probability",
       "name": "Intraday Reversal Probability",
-      "koreanName": "?? ?? ??",
+      "koreanName": "장중 반전 확률",
       "category": "intraday",
       "type": "probability",
       "description": "Estimates probability of intraday reversal after extension or failed breakdown.",

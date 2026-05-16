@@ -7,7 +7,7 @@
     "liquidity_risk_score": {
       "id": "liquidity_risk_score",
       "name": "Liquidity Risk Score",
-      "koreanName": "??? ?? ??",
+      "koreanName": "유동성 위험 점수",
       "category": "risk",
       "type": "risk",
       "description": "Scores execution and slippage risk from low trading value and thin orderbook depth.",
@@ -130,7 +130,7 @@
     "data_quality_risk": {
       "id": "data_quality_risk",
       "name": "Data Quality Risk",
-      "koreanName": "??? ?? ??",
+      "koreanName": "데이터 품질 위험",
       "category": "risk",
       "type": "risk",
       "description": "Scores data reliability risk from missing, stale, or inconsistent sources.",
@@ -254,7 +254,7 @@
     "delisting_risk": {
       "id": "delisting_risk",
       "name": "Delisting Risk",
-      "koreanName": "???? ??",
+      "koreanName": "상장폐지 위험",
       "category": "risk",
       "type": "risk",
       "description": "Scores severe listing continuity risk from exchange flags and financial distress.",

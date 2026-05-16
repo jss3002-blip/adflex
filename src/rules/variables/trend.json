@@ -7,7 +7,7 @@
     "ma_alignment_score": {
       "id": "ma_alignment_score",
       "name": "Ma Alignment Score",
-      "koreanName": "???? ?? ??",
+      "koreanName": "이동평균 배열 점수",
       "category": "trend",
       "type": "score",
       "description": "Scores bullish or bearish ordering across short, medium, and long moving averages.",
@@ -131,7 +131,7 @@
     "trend_slope_score": {
       "id": "trend_slope_score",
       "name": "Trend Slope Score",
-      "koreanName": "?? ??? ??",
+      "koreanName": "추세 기울기 점수",
       "category": "trend",
       "type": "score",
       "description": "Measures whether the primary moving average slope supports trend continuation.",
@@ -253,7 +253,7 @@
     "trend_breakdown_risk": {
       "id": "trend_breakdown_risk",
       "name": "Trend Breakdown Risk",
-      "koreanName": "?? ?? ??",
+      "koreanName": "추세 붕괴 위험",
       "category": "trend",
       "type": "risk",
       "description": "Estimates risk of trend failure from moving average loss and weak close structure.",

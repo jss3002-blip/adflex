@@ -7,7 +7,7 @@
     "orderbook_imbalance_score": {
       "id": "orderbook_imbalance_score",
       "name": "Orderbook Imbalance Score",
-      "koreanName": "?? ??? ??",
+      "koreanName": "호가 불균형 점수",
       "category": "microstructure",
       "type": "score",
       "description": "Scores bid/ask imbalance after depth quality adjustment.",
@@ -129,7 +129,7 @@
     "spread_risk_score": {
       "id": "spread_risk_score",
       "name": "Spread Risk Score",
-      "koreanName": "???? ?? ??",
+      "koreanName": "스프레드 위험 점수",
       "category": "microstructure",
       "type": "risk",
       "description": "Measures execution risk from bid-ask spread width.",
@@ -252,7 +252,7 @@
     "fake_liquidity_score": {
       "id": "fake_liquidity_score",
       "name": "Fake Liquidity Score",
-      "koreanName": "?? ??? ??",
+      "koreanName": "허위 유동성 점수",
       "category": "microstructure",
       "type": "risk",
       "description": "Detects unstable visible liquidity that disappears near execution.",

@@ -7,7 +7,7 @@
     "fomo_risk": {
       "id": "fomo_risk",
       "name": "Fomo Risk",
-      "koreanName": "FOMO ??",
+      "koreanName": "FOMO 위험",
       "category": "sentiment",
       "type": "risk",
       "description": "Estimates late-entry risk caused by overheated public attention.",
@@ -129,7 +129,7 @@
     "crowding_score": {
       "id": "crowding_score",
       "name": "Crowding Score",
-      "koreanName": "??? ??",
+      "koreanName": "군집도 점수",
       "category": "sentiment",
       "type": "index",
       "description": "Measures how concentrated public attention and positioning appear.",
@@ -250,7 +250,7 @@
     "narrative_fatigue_score": {
       "id": "narrative_fatigue_score",
       "name": "Narrative Fatigue Score",
-      "koreanName": "???? ??? ??",
+      "koreanName": "내러티브 피로도 점수",
       "category": "sentiment",
       "type": "risk",
       "description": "Detects whether a previously strong narrative is losing incremental impact.",

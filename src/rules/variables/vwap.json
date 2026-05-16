@@ -7,7 +7,7 @@
     "vwap_hold_score": {
       "id": "vwap_hold_score",
       "name": "Vwap Hold Score",
-      "koreanName": "VWAP ?? ??",
+      "koreanName": "VWAP 유지 점수",
       "category": "vwap",
       "type": "score",
       "description": "Scores whether price is holding above session VWAP with acceptable pullbacks.",
@@ -129,7 +129,7 @@
     "vwap_reclaim_score": {
       "id": "vwap_reclaim_score",
       "name": "Vwap Reclaim Score",
-      "koreanName": "VWAP ?? ??",
+      "koreanName": "VWAP 회복 점수",
       "category": "vwap",
       "type": "score",
       "description": "Scores quality of reclaiming VWAP after an intraday loss.",
@@ -251,7 +251,7 @@
     "minute_vwap_loss_risk": {
       "id": "minute_vwap_loss_risk",
       "name": "Minute Vwap Loss Risk",
-      "koreanName": "?? VWAP ?? ??",
+      "koreanName": "분봉 VWAP 이탈 위험",
       "category": "vwap",
       "type": "risk",
       "description": "Detects fast intraday risk when minute bars fail below VWAP.",

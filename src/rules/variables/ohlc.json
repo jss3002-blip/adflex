@@ -7,7 +7,7 @@
     "close_position_score": {
       "id": "close_position_score",
       "name": "Close Position Score",
-      "koreanName": "?? ?? ??",
+      "koreanName": "종가 위치 점수",
       "category": "ohlc_candle",
       "type": "score",
       "description": "Scores the close location inside the candle range.",
@@ -129,7 +129,7 @@
     "upper_wick_ratio": {
       "id": "upper_wick_ratio",
       "name": "Upper Wick Ratio",
-      "koreanName": "??? ??",
+      "koreanName": "윗꼬리 비율",
       "category": "ohlc_candle",
       "type": "ratio",
       "description": "Measures selling pressure shown by the upper wick.",
@@ -251,7 +251,7 @@
     "lower_wick_ratio": {
       "id": "lower_wick_ratio",
       "name": "Lower Wick Ratio",
-      "koreanName": "???? ??",
+      "koreanName": "아래꼬리 비율",
       "category": "ohlc_candle",
       "type": "ratio",
       "description": "Measures intraday demand absorption shown by the lower wick.",

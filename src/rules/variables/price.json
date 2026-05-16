@@ -7,7 +7,7 @@
     "current_price_position_score": {
       "id": "current_price_position_score",
       "name": "Current Price Position Score",
-      "koreanName": "??? ?? ??",
+      "koreanName": "현재가 위치 점수",
       "category": "price_state",
       "type": "score",
       "description": "Scores where the current price sits within a recent reference range.",
@@ -128,7 +128,7 @@
     "price_speed_score": {
       "id": "price_speed_score",
       "name": "Price Speed Score",
-      "koreanName": "?? ?? ??",
+      "koreanName": "가격 속도 점수",
       "category": "price_state",
       "type": "score",
       "description": "Measures short-term price acceleration compared with recent average movement.",

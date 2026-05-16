@@ -7,7 +7,7 @@
     "distribution_layer_score": {
       "id": "distribution_layer_score",
       "name": "Distribution Layer Score",
-      "koreanName": "?? ??? ??",
+      "koreanName": "고점 분배층 점수",
       "category": "smart_money",
       "type": "risk",
       "description": "Scores layered selling risk near resistance or after extended runs.",
@@ -130,7 +130,7 @@
     "smart_money_absorption_score": {
       "id": "smart_money_absorption_score",
       "name": "Smart Money Absorption Score",
-      "koreanName": "????? ?? ??",
+      "koreanName": "스마트머니 흡수 점수",
       "category": "smart_money",
       "type": "score",
       "description": "Scores evidence of strong hands absorbing supply during pullbacks.",
@@ -254,7 +254,7 @@
     "liquidity_grab_score": {
       "id": "liquidity_grab_score",
       "name": "Liquidity Grab Score",
-      "koreanName": "??? ?? ??",
+      "koreanName": "유동성 스윕 점수",
       "category": "smart_money",
       "type": "score",
       "description": "Detects stop-hunt style liquidity grabs followed by reclaim.",

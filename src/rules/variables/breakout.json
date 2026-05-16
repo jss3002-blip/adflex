@@ -7,7 +7,7 @@
     "true_breakout_probability": {
       "id": "true_breakout_probability",
       "name": "True Breakout Probability",
-      "koreanName": "?? ?? ??",
+      "koreanName": "진짜 돌파 확률",
       "category": "breakout",
       "type": "probability",
       "description": "Estimates probability that a breakout is supported by volume, close quality, and follow-through.",
@@ -130,7 +130,7 @@
     "false_breakout_risk": {
       "id": "false_breakout_risk",
       "name": "False Breakout Risk",
-      "koreanName": "?? ?? ??",
+      "koreanName": "가짜 돌파 위험",
       "category": "breakout",
       "type": "risk",
       "description": "Measures breakout failure risk from upper wick, weak close, and volume climax.",
@@ -253,7 +253,7 @@
     "breakout_reliability_score": {
       "id": "breakout_reliability_score",
       "name": "Breakout Reliability Score",
-      "koreanName": "?? ??? ??",
+      "koreanName": "돌파 신뢰도 점수",
       "category": "breakout",
       "type": "score",
       "description": "Scores breakout quality after penalizing overlap and failure signals.",
