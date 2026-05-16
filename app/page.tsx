@@ -910,7 +910,11 @@ function AnalysisResultCard({
         )}
       </div>
 
-      <IndicatorSections result={result} hiddenConfirmationTitles={topConfirmationCards.map((card) => card.title)} />
+      <IndicatorSections
+        result={result}
+        hiddenConfirmationTitles={topConfirmationCards.map((card) => card.title)}
+        hiddenConfirmationGroups={topConfirmationCards.map((card) => getConfirmationGroup(card.categoryKey))}
+      />
 
       <DetailedAnalysisSection
         result={result}
@@ -1187,12 +1191,16 @@ function RiskGateOverlayPanel({ overlay }: { overlay: RiskGateOverlayViewResult 
       </div>
       <p className="mt-3 text-xs leading-6 text-white/58">{overlay.summaryKo}</p>
       <p className="mt-2 text-[11px] leading-5 text-white/48">{overlay.interpretationKo}</p>
+      <p className="mt-2 text-[11px] leading-5 text-white/48">
+        이 점수는 종목 전체 위험도나 매수/매도 판단이 아니라, 원점수가 무난해 보여도 핵심 구조 위험 때문에
+        해석을 얼마나 신중하게 해야 하는지를 나타내는 보조 해석 점수입니다.
+      </p>
       <p className="mt-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-5 text-orange-100/72">
         {overlay.recommendedActionBiasKo}
       </p>
       <p className="mt-2 text-[11px] leading-5 text-white/42">
-        이 항목은 현재 finalScore를 변경하지 않습니다. 원점수 해석을 더 신중하게 볼 필요가 있는지 확인하는 구조
-        해석 계층입니다.
+        이 항목은 현재 finalScore, riskScore, 상태 분류, 대응 라벨을 변경하지 않습니다. 원점수 해석을 더
+        신중하게 볼 필요가 있는지 확인하는 구조 해석 계층입니다.
       </p>
       {activeGates.length > 0 ? (
         <div className="mt-4 space-y-3">
@@ -1242,6 +1250,7 @@ function QualitySignalPanel({
   const levelLabel = getQualitySignalLevelLabel(level);
   const colorClass = getActionPriorityColor(safeScore);
   const displayItems = (items || []).slice(0, 3);
+  const helperText = getQualitySignalHelperText(title);
 
   return (
     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -1263,10 +1272,11 @@ function QualitySignalPanel({
       <p className="mt-3 text-xs leading-6 text-white/58">
         {summary || emptyMessage}
       </p>
+      <p className="mt-2 text-[11px] leading-5 text-white/48">{helperText}</p>
       {safeScore >= 85 ? (
         <p className="mt-2 text-[11px] leading-5 text-orange-100/70">
-          보조 분석 기준 매우 높음 상태입니다. 직접적인 매수/매도 판단이 아니라 구조 점검 신호이며, 단기 확인
-          우선순위가 높다는 뜻으로 해석하세요.
+          구조 점검 필요성이 강하게 나타난 상태입니다. 직접적인 매수/매도 판단이 아니라 단기 확인 우선순위가
+          높다는 뜻으로 해석하세요.
         </p>
       ) : (
         <p className="mt-2 text-[11px] leading-5 text-white/42">
@@ -1394,9 +1404,11 @@ function ScoreCard({
 function IndicatorSections({
   result,
   hiddenConfirmationTitles = [],
+  hiddenConfirmationGroups = [],
 }: {
   result: StockAnalysisViewResult;
   hiddenConfirmationTitles?: string[];
+  hiddenConfirmationGroups?: string[];
 }) {
   return (
     <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -1406,6 +1418,8 @@ function IndicatorSections({
         items={result.evidence.positive}
         result={result}
         tone="green"
+        hiddenTitles={hiddenConfirmationTitles}
+        hiddenGroups={hiddenConfirmationGroups}
         emptyMessage="현재 뚜렷한 긍정 지표는 추가 확인이 필요합니다."
       />
       <IndicatorList
@@ -1414,6 +1428,8 @@ function IndicatorSections({
         items={result.evidence.neutral}
         result={result}
         tone="yellow"
+        hiddenTitles={hiddenConfirmationTitles}
+        hiddenGroups={hiddenConfirmationGroups}
         emptyMessage="현재 중립 지표는 별도로 표시되지 않았습니다."
       />
       <IndicatorList
@@ -1422,6 +1438,8 @@ function IndicatorSections({
         items={result.evidence.negative}
         result={result}
         tone="orange"
+        hiddenTitles={hiddenConfirmationTitles}
+        hiddenGroups={hiddenConfirmationGroups}
         emptyMessage="현재 강한 주의 신호는 감지되지 않았습니다."
       />
       <IndicatorList
@@ -1431,6 +1449,7 @@ function IndicatorSections({
         result={result}
         tone="red"
         hiddenTitles={hiddenConfirmationTitles}
+        hiddenGroups={hiddenConfirmationGroups}
         emptyMessage="현재 표시된 주요 확인 항목은 없습니다."
       />
     </div>
@@ -1444,6 +1463,7 @@ function IndicatorList({
   result,
   tone,
   hiddenTitles = [],
+  hiddenGroups = [],
   emptyMessage,
 }: {
   title: string;
@@ -1452,15 +1472,16 @@ function IndicatorList({
   result: StockAnalysisViewResult;
   tone: "green" | "yellow" | "orange" | "red";
   hiddenTitles?: string[];
+  hiddenGroups?: string[];
   emptyMessage: string;
 }) {
   const toneClass = getIndicatorToneClass(tone);
   const sectionBadge = getIndicatorSectionBadge(tone, badge);
   const insightCards = buildIndicatorCards(items, result, sectionBadge, tone).filter(
-    (card) => !hiddenTitles.includes(card.title),
+    (card) => !isRepeatedConfirmationCard(card, hiddenTitles, hiddenGroups),
   );
 
-  if (tone === "red" && insightCards.length === 0) {
+  if (insightCards.length === 0) {
     return null;
   }
 
@@ -1620,11 +1641,23 @@ function getActionPriorityColor(score: number) {
 }
 
 function getQualitySignalLevelLabel(level: QualitySignalLevel | undefined): string {
-  if (level === "CRITICAL") return "보조 분석 기준 매우 높음";
+  if (level === "CRITICAL") return "구조 점검 필요";
   if (level === "HIGH") return "단기 확인 우선순위 높음";
-  if (level === "MEDIUM") return "보조 위험 신호 보통";
+  if (level === "MEDIUM") return "회복 신뢰도 확인 필요";
   if (level === "LOW") return "보조 위험 신호 낮음";
   return "보조 분석 확인";
+}
+
+function getQualitySignalHelperText(title: string): string {
+  if (title === "신호 충돌 분석") {
+    return "이 점수는 종목 전체 위험도가 아니라, 긍정적으로 보이는 신호와 단기 약세 신호가 얼마나 충돌하는지를 보는 보조 지표입니다. 장기 위치나 거래량처럼 좋아 보이는 요소가 있더라도 VWAP 약세, 약한 종가, 추세 훼손 위험이 함께 나타나면 단기 해석은 더 신중해야 합니다.";
+  }
+
+  if (title === "가짜 신호 위험") {
+    return "이 점수는 하락을 예측하는 점수가 아니라, 장중 움직임이나 거래량이 있어도 실제 회복 신뢰도가 낮을 수 있는지를 점검하는 보조 지표입니다. VWAP 회복 실패, 약한 종가, 변동성 확대가 함께 나타나면 단순 반등을 진짜 회복으로 착각하지 않도록 확인이 필요합니다.";
+  }
+
+  return "이 점수는 종목 전체 위험도와 직접 비교하는 값이 아니라 단기 구조 점검을 돕는 보조 지표입니다.";
 }
 
 function getRiskGateSeverityLabel(severity: RiskGateSeverity | undefined): string {
@@ -1632,7 +1665,7 @@ function getRiskGateSeverityLabel(severity: RiskGateSeverity | undefined): strin
   if (severity === "WATCH") return "관찰";
   if (severity === "CAUTION") return "주의";
   if (severity === "HIGH_RISK") return "고위험";
-  if (severity === "BLOCK") return "분석 제한";
+  if (severity === "BLOCK") return "강한 판단 제한";
   return "게이트 확인";
 }
 
@@ -1764,6 +1797,19 @@ function buildIndicatorCards(
   }
 
   return Array.from(cardMap.values());
+}
+
+function isRepeatedConfirmationCard(
+  card: IndicatorInsight,
+  hiddenTitles: string[],
+  hiddenGroups: string[],
+): boolean {
+  if (hiddenTitles.includes(card.title)) return true;
+
+  const group = getConfirmationGroup(card.categoryKey);
+  if (!hiddenGroups.includes(group)) return false;
+
+  return group === "vwap" || group === "trend" || group === "close";
 }
 
 function getTopConfirmationCards(

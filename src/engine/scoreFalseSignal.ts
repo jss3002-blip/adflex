@@ -54,7 +54,7 @@ export function analyzeFalseSignalRisk(input: FalseSignalInput): FalseSignalResu
       summaryKo: "장중 움직임은 있었지만 VWAP와 종가 위치가 약해 반등 신뢰도를 조심해서 봐야 하는 상태입니다.",
       evidenceKo: `VWAP 점수 ${formatScore(input.vwapScore)}점, 종가 위치 점수 ${formatScore(input.closePositionScore)}점, 장중 변동폭 ${formatPercent(input.intradayRangePercent)} 기준으로 판단했습니다.`,
       checkPointKo: "다음 거래일 VWAP 위로 회복한 뒤 종가까지 유지되는지 확인해야 합니다.",
-      penalty: 18,
+      penalty: 16,
     });
   }
 
@@ -66,7 +66,7 @@ export function analyzeFalseSignalRisk(input: FalseSignalInput): FalseSignalResu
       summaryKo: "거래량은 유지됐지만 고점 부근에서 밀린 흔적이 있어 상단 대기 물량이 우세했을 가능성이 있습니다.",
       evidenceKo: `윗꼬리 비율 ${formatPercent(input.upperWickRatio)}, 거래량 점수 ${formatScore(input.volumeScore)}점, 종가 위치 점수 ${formatScore(input.closePositionScore)}점 기준입니다.`,
       checkPointKo: "다음 거래일 고점권을 다시 회복하는지, 또는 반등 시마다 매물이 반복되는지 확인해야 합니다.",
-      penalty: 12,
+      penalty: 9,
     });
   }
 
@@ -78,7 +78,7 @@ export function analyzeFalseSignalRisk(input: FalseSignalInput): FalseSignalResu
       summaryKo: "장중 흔들림이 컸지만 마감 위치가 약해 가격 신호의 안정성이 낮아진 상태입니다.",
       evidenceKo: `변동성 위험 ${formatScore(input.volatilityRisk)}점, 종가 위치 점수 ${formatScore(input.closePositionScore)}점 기준으로 장 마감 수급 약화를 점검합니다.`,
       checkPointKo: "다음 거래일 변동폭이 줄어들고 종가가 중상단 이상에 남는지 확인해야 합니다.",
-      penalty: 16,
+      penalty: 14,
     });
   }
 
@@ -90,7 +90,7 @@ export function analyzeFalseSignalRisk(input: FalseSignalInput): FalseSignalResu
       summaryKo: "가격이 평균 거래 단가 아래에 머물러 단기 반등 신뢰도가 낮아질 수 있는 상태입니다.",
       evidenceKo: `VWAP 리스크 점수 ${formatScore(input.vwapRiskScore)}점, VWAP 이격률 ${formatPercent(input.vwapDistancePercent)} 기준입니다.`,
       checkPointKo: "VWAP 재돌파 후 다시 이탈하지 않고 종가까지 유지되는지 확인해야 합니다.",
-      penalty: 18,
+      penalty: 16,
     });
   }
 
@@ -102,7 +102,7 @@ export function analyzeFalseSignalRisk(input: FalseSignalInput): FalseSignalResu
       summaryKo: "거래량은 유지되고 있지만 가격이 충분히 회복되지 못해 강한 우위 흐름으로 확정하기 어렵습니다.",
       evidenceKo: `거래량 점수 ${formatScore(input.volumeScore)}점, 종가 위치 점수 ${formatScore(input.closePositionScore)}점, VWAP 점수 ${formatScore(input.vwapScore)}점 기준입니다.`,
       checkPointKo: "거래량 증가가 가격 회복과 함께 나타나는지 확인해야 합니다.",
-      penalty: 12,
+      penalty: 10,
     });
   }
 

@@ -92,7 +92,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       titleKo: "VWAP 평균 단가 회복 실패 게이트",
       summaryKo:
         "VWAP 이탈 게이트는 단순히 가격이 VWAP 아래에 있는지만 보는 조건이 아니라, 시장 참여자의 평균 거래 단가 회복에 실패한 상태에서 VWAP 리스크와 단기 수급 불안이 함께 나타났는지를 확인하는 구조 점검 게이트입니다. 이 조건이 활성화되면 장중 반등이나 거래량 증가를 곧바로 회복 신호로 해석하지 않고, VWAP 재돌파 후 종가까지 유지되는지를 먼저 확인해야 합니다.",
-      evidenceKo: `VWAP 점수 ${formatScore(input.vwapScore)}점, VWAP 리스크 점수 ${formatScore(input.vwapRiskScore)}점, VWAP 이탈 위험 ${formatScore(input.vwapBreakdownRisk)}점, VWAP 이격률 ${formatPercent(input.vwapDistancePercent)} 기준으로 평균 단가 회복 실패 가능성을 점검했습니다.`,
+      evidenceKo: `VWAP 점수 ${formatScore(input.vwapScore)}, VWAP 리스크 점수 ${formatScore(input.vwapRiskScore)}, VWAP 이탈 위험 ${formatScore(input.vwapBreakdownRisk)}, VWAP 이격률 ${formatPercent(input.vwapDistancePercent)} 기준으로 평균 단가 회복 실패 가능성을 점검했습니다.`,
       actionKo:
         "고객은 이 신호를 방향 확정이 아니라 단기 확인 우선 조건으로 봐야 합니다. 다음 흐름에서 VWAP 위 회복, 종가 유지, 거래량의 질이 함께 개선되는지 확인하는 것이 핵심입니다.",
       scoreImpactNoteKo:
@@ -110,7 +110,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       titleKo: "저가권 종가 마감 게이트",
       summaryKo:
         "약한 종가 게이트는 단순히 캔들 모양이 나쁘다는 뜻이 아닙니다. 장중에 반등이 있었더라도 마감으로 갈수록 가격 방어가 약해졌고, 다음 거래일 초반 심리와 VWAP 회복 신뢰도에 영향을 줄 수 있다는 점을 확인하는 구조 점검 게이트입니다.",
-      evidenceKo: `종가 위치 점수 ${formatScore(input.closePositionScore)}점, 일간 변화율 ${formatPercent(input.dailyChangePercent)}, 장중 변동폭 ${formatPercent(input.intradayRangePercent)} 기준으로 장 마감 가격 방어력이 약했는지 확인했습니다.`,
+      evidenceKo: `종가 위치 점수 ${formatScore(input.closePositionScore)}, 일간 변화율 ${formatPercent(input.dailyChangePercent)}, 장중 변동폭 ${formatPercent(input.intradayRangePercent)} 기준으로 장 마감 가격 방어력이 약했는지 확인했습니다.`,
       actionKo:
         "고객은 이 신호를 단독 판단으로 보지 말고 다음 거래일 시초가, VWAP 회복, 종가 위치 개선 여부를 함께 확인해야 합니다. 핵심은 상태가 회복되는지 또는 저가권 마감이 반복되는지입니다.",
       scoreImpactNoteKo:
@@ -128,7 +128,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       titleKo: "추세 유지력 약화 게이트",
       summaryKo:
         "추세 붕괴 게이트는 추세가 확정적으로 무너졌다고 단정하는 조건이 아닙니다. StockAI 관점에서는 좋은 상태가 유지되는지, VWAP와 주요 가격선을 회복하는지, 종가가 더 강해지는지를 확인하는 상태 유지력 점검 신호입니다.",
-      evidenceKo: `추세 붕괴 위험 ${formatScore(input.trendCollapseRisk)}점, VWAP 점수 ${formatScore(input.vwapScore)}점, 종가 위치 점수 ${formatScore(input.closePositionScore)}점 기준으로 단순 조정과 상태 유지 실패 가능성을 구분했습니다.`,
+      evidenceKo: `추세 붕괴 위험 ${formatScore(input.trendCollapseRisk)}, VWAP 점수 ${formatScore(input.vwapScore)}, 종가 위치 점수 ${formatScore(input.closePositionScore)} 기준으로 단순 조정과 상태 유지 실패 가능성을 구분했습니다.`,
       actionKo:
         "고객은 이 신호를 추세 확정 판단이 아니라 상태 유지 조건 점검으로 해석해야 합니다. 다음 거래일 VWAP 회복, 주요 가격선 회복, 강한 종가가 함께 나오는지 확인해야 합니다.",
       scoreImpactNoteKo:
@@ -151,7 +151,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       titleKo: "변동성 확대 후 약한 종가 게이트",
       summaryKo:
         "변동성 확대 자체는 방향을 말해주지 않습니다. 문제는 장중 흔들림이 커진 뒤 종가가 약하게 끝나는 구조입니다. 이 조합은 가격 발견이 불안정했고 후속 유지력이 약할 수 있음을 보여주므로 단순 반등 신호보다 마감 안정성을 우선 확인해야 합니다.",
-      evidenceKo: `변동성 위험 ${formatScore(input.volatilityRisk)}점, 종가 위치 점수 ${formatScore(input.closePositionScore)}점, 장중 변동폭 ${formatPercent(input.intradayRangePercent)} 기준으로 흔들림 이후 마감 품질을 점검했습니다.`,
+      evidenceKo: `변동성 위험 ${formatScore(input.volatilityRisk)}, 종가 위치 점수 ${formatScore(input.closePositionScore)}, 장중 변동폭 ${formatPercent(input.intradayRangePercent)} 기준으로 흔들림 이후 마감 품질을 점검했습니다.`,
       actionKo:
         "고객은 다음 거래일 변동폭이 줄어드는지, 종가가 중상단 이상으로 회복되는지, VWAP 위 유지가 나타나는지 확인해야 합니다.",
       scoreImpactNoteKo:
@@ -173,7 +173,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       titleKo: "거래 참여 대비 가격 회복 부족 게이트",
       summaryKo:
         "StockAI는 거래량을 자동으로 긍정 신호로 보지 않습니다. 거래 참여가 있어도 가격이 VWAP를 회복하지 못하거나 종가가 약하면, 그 거래량은 회복의 힘이 아니라 공급 압력 흡수 실패, 분배, 실패한 참여일 수 있습니다.",
-      evidenceKo: `거래량 점수 ${formatScore(input.volumeScore)}점, 거래량 리스크 ${formatScore(input.volumeRiskScore)}점, 종가 위치 점수 ${formatScore(input.closePositionScore)}점, VWAP 점수 ${formatScore(input.vwapScore)}점 기준으로 거래량과 가격 회복의 동행 여부를 확인했습니다.`,
+      evidenceKo: `거래량 점수 ${formatScore(input.volumeScore)}, 거래량 리스크 ${formatScore(input.volumeRiskScore)}, 종가 위치 점수 ${formatScore(input.closePositionScore)}, VWAP 점수 ${formatScore(input.vwapScore)} 기준으로 거래량과 가격 회복의 동행 여부를 확인했습니다.`,
       actionKo:
         "고객은 거래량 증가만 보고 구조가 좋아졌다고 판단하지 말고, 가격 회복과 VWAP 유지가 거래량과 함께 나타나는지 확인해야 합니다.",
       scoreImpactNoteKo:
@@ -193,7 +193,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       titleKo: "보조 구조 위험 게이트",
       summaryKo:
         "보조 위험 게이트는 종합 리스크 점수와 같은 의미가 아닙니다. conflictScore와 falseSignalScore는 평균 점수 안에 잘 드러나지 않는 신호 충돌, 가짜 반등, 표면적 강세와 내부 약세의 불일치를 따로 보는 구조 점검 신호입니다.",
-      evidenceKo: `신호 충돌 점수 ${formatScore(input.conflictScore)}점, 가짜 신호 위험 ${formatScore(input.falseSignalScore)}점, 종합 리스크 ${formatScore(input.totalRiskScore)}점 기준으로 숨은 구조 위험이 평균 리스크와 다른지 확인했습니다.`,
+      evidenceKo: `신호 충돌 점수 ${formatScore(input.conflictScore)}, 가짜 신호 위험 ${formatScore(input.falseSignalScore)}, 종합 리스크 ${formatScore(input.totalRiskScore)} 기준으로 숨은 구조 위험이 평균 리스크와 다른지 확인했습니다.`,
       actionKo:
         "고객은 보조 위험 점수를 종합 리스크와 직접 비교하지 말고, 단기 확인 우선순위를 정하는 참고 신호로 해석해야 합니다.",
       scoreImpactNoteKo:
@@ -214,7 +214,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       titleKo: "데이터 품질 및 해석 신뢰도 제한 게이트",
       summaryKo:
         "데이터 품질 게이트는 StockAI의 안전장치입니다. 데이터가 지연되었거나, 추정값이거나, 결측이 있거나, 백테스트 기준으로 재현하기 어려운 상태라면 좋은 점수도 강하게 해석하면 안 됩니다. 분석 강도보다 데이터 사용 가능 여부가 먼저입니다.",
-      evidenceKo: `데이터 품질 점수 ${formatScore(input.dataQualityScore)}점, 신뢰도 점수 ${formatScore(input.confidenceScore)}점, 데이터 모드 ${formatText(input.dataMode)}, 실시간 여부 ${formatRealtime(input.isRealtime)} 기준으로 분석 제한 필요성을 확인했습니다.`,
+      evidenceKo: `데이터 품질 점수 ${formatScore(input.dataQualityScore)}, 신뢰도 점수 ${formatScore(input.confidenceScore)}, 데이터 모드 ${formatText(input.dataMode)}, 실시간 여부 ${formatRealtime(input.isRealtime)} 기준으로 강한 판단 제한 필요성을 확인했습니다.`,
       actionKo:
         "고객은 이 신호가 활성화되면 강한 해석보다 데이터 보강, 기준일 확인, 실시간성 확인, 사람 검토 성격을 우선해야 합니다.",
       scoreImpactNoteKo:
@@ -231,7 +231,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       titleKo: "평균 리스크와 핵심 위험 괴리 게이트",
       summaryKo:
         "이 게이트는 StockAI의 핵심 차별점 중 하나입니다. 종합 리스크가 보통처럼 보여도 VWAP 리스크, 약한 종가, 추세 붕괴, 가짜 신호, 신호 충돌 같은 핵심 위험이 집중되어 있으면 평균 점수가 위험을 숨길 수 있습니다.",
-      evidenceKo: `종합 리스크 ${formatScore(input.totalRiskScore)}점, VWAP 리스크 ${formatScore(input.vwapRiskScore)}점, 추세 붕괴 위험 ${formatScore(input.trendCollapseRisk)}점, 신호 충돌 ${formatScore(input.conflictScore)}점, 가짜 신호 위험 ${formatScore(input.falseSignalScore)}점, 종가 위치 ${formatScore(input.closePositionScore)}점 기준으로 평균 리스크와 세부 핵심 위험의 괴리를 확인했습니다.`,
+      evidenceKo: `종합 리스크 ${formatScore(input.totalRiskScore)}, VWAP 리스크 ${formatScore(input.vwapRiskScore)}, 추세 붕괴 위험 ${formatScore(input.trendCollapseRisk)}, 신호 충돌 ${formatScore(input.conflictScore)}, 가짜 신호 위험 ${formatScore(input.falseSignalScore)}, 종가 위치 ${formatScore(input.closePositionScore)} 기준으로 평균 리스크와 세부 핵심 위험의 괴리를 확인했습니다.`,
       actionKo:
         "고객은 리스크가 보통이라는 표현만 보고 안심하지 말고, 실제로 어떤 핵심 위험이 높은지 먼저 확인해야 합니다.",
       scoreImpactNoteKo:
@@ -248,7 +248,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       titleKo: "상태 유지 실패 클러스터 게이트",
       summaryKo:
         "상태 붕괴 클러스터 게이트는 하나의 약한 신호를 과대해석하지 않습니다. 약한 종가, VWAP 약세, 추세 훼손 위험, 변동성 확대, 큰 하락이 동시에 나타나는지를 확인해 현재 상태가 유지되는지 아니면 회복 전 확인이 필요한지 구분합니다.",
-      evidenceKo: `종가 위치 ${formatScore(input.closePositionScore)}점, VWAP 점수 ${formatScore(input.vwapScore)}점, 추세 붕괴 위험 ${formatScore(input.trendCollapseRisk)}점, 변동성 위험 ${formatScore(input.volatilityRisk)}점, 일간 변화율 ${formatPercent(input.dailyChangePercent)} 기준으로 상태 유지 실패 조건의 군집 여부를 확인했습니다.`,
+      evidenceKo: `종가 위치 ${formatScore(input.closePositionScore)}, VWAP 점수 ${formatScore(input.vwapScore)}, 추세 붕괴 위험 ${formatScore(input.trendCollapseRisk)}, 변동성 위험 ${formatScore(input.volatilityRisk)}, 일간 변화율 ${formatPercent(input.dailyChangePercent)} 기준으로 상태 유지 실패 조건의 군집 여부를 확인했습니다.`,
       actionKo:
         "고객은 이 신호를 직접적인 방향 예측이 아니라 상태 유지 실패 가능성 점검으로 봐야 합니다. 다음 흐름에서 VWAP 회복, 변동성 축소, 강한 종가가 함께 나오는지가 중요합니다.",
       scoreImpactNoteKo:
@@ -265,7 +265,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       titleKo: "해석 신뢰도 제한 게이트",
       summaryKo:
         "신뢰도 제한 게이트는 종목의 매력도를 평가하는 조건이 아닙니다. 일부 점수가 좋아 보여도 데이터 부족, 신호 충돌, 가짜 신호 가능성, 공급자 freshness 문제 때문에 해석 자체를 강하게 말하기 어려운 상태를 표시합니다.",
-      evidenceKo: `신뢰도 점수 ${formatScore(input.confidenceScore)}점, 데이터 품질 ${formatScore(input.dataQualityScore)}점, 신호 충돌 ${formatScore(input.conflictScore)}점, 가짜 신호 위험 ${formatScore(input.falseSignalScore)}점 기준으로 해석 신뢰도 제한 여부를 확인했습니다.`,
+      evidenceKo: `신뢰도 점수 ${formatScore(input.confidenceScore)}, 데이터 품질 ${formatScore(input.dataQualityScore)}, 신호 충돌 ${formatScore(input.conflictScore)}, 가짜 신호 위험 ${formatScore(input.falseSignalScore)} 기준으로 해석 신뢰도 제한 여부를 확인했습니다.`,
       actionKo:
         "고객은 이 신호가 활성화되면 점수의 높고 낮음보다 분석 신뢰도와 데이터 조건을 먼저 확인해야 합니다.",
       scoreImpactNoteKo:
@@ -310,7 +310,7 @@ export function getRiskGateSeverityLabelKo(severity: RiskGateSeverity): string {
   if (severity === "WATCH") return "관찰";
   if (severity === "CAUTION") return "주의";
   if (severity === "HIGH_RISK") return "고위험";
-  return "분석 제한";
+  return "강한 판단 제한";
 }
 
 export function clampOverlayScore(value: number): number {
@@ -405,7 +405,7 @@ function buildRecommendedActionBias(
   gates: RiskGateInsight[],
 ): string {
   if (severity === "BLOCK") {
-    return "강한 판단 제한과 HUMAN_REVIEW 성격을 강화하는 쪽이 적절합니다. 데이터 품질, VWAP 회복, 종가 개선, 핵심 위험 완화를 먼저 확인해야 합니다.";
+    return "강한 판단 제한 단계입니다. 원점수만으로 강하게 해석하기보다 데이터 품질, VWAP 회복, 종가 개선, 핵심 위험 완화를 먼저 확인해야 합니다.";
   }
   if (severity === "HIGH_RISK") {
     return "리스크 관리 우선 해석이 필요합니다. 관찰보다 확인 우선 비중을 높이고, 상태 유지 실패 조건이 완화되는지 점검해야 합니다.";

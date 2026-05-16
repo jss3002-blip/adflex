@@ -56,7 +56,7 @@ export function analyzeSignalConflicts(input: SignalConflictInput): SignalConfli
       summaryKo: "52주 가격 위치는 양호하지만 VWAP 또는 종가 위치가 약해 단기 수급 확인이 필요합니다.",
       evidenceKo: `52주 위치 점수 ${formatScore(input.fiftyTwoWeekPositionScore)}점, VWAP 점수 ${formatScore(input.vwapScore)}점, 종가 위치 점수 ${formatScore(input.closePositionScore)}점 기준입니다.`,
       checkPointKo: "고점권 부담이 커지는지, 다음 거래일 VWAP 회복과 종가 위치 개선이 함께 나타나는지 확인해야 합니다.",
-      penalty: 18,
+      penalty: 16,
     });
   }
 
@@ -68,7 +68,7 @@ export function analyzeSignalConflicts(input: SignalConflictInput): SignalConfli
       summaryKo: "거래량 참여는 유지되지만 가격이 강하게 회복되지 않아 우위 흐름으로 단정하기 어렵습니다.",
       evidenceKo: `거래량 점수 ${formatScore(input.volumeScore)}점, 종가 위치 점수 ${formatScore(input.closePositionScore)}점, VWAP 점수 ${formatScore(input.vwapScore)}점 기준입니다.`,
       checkPointKo: "거래량 증가가 종가 회복과 VWAP 회복을 동반하는지 확인해야 합니다.",
-      penalty: 12,
+      penalty: 10,
     });
   }
 
@@ -80,7 +80,7 @@ export function analyzeSignalConflicts(input: SignalConflictInput): SignalConfli
       summaryKo: "전체 리스크는 극단 구간이 아니어도 VWAP 이탈 또는 추세 훼손 같은 핵심 위험이 높을 수 있습니다.",
       evidenceKo: `종합 리스크 ${formatScore(input.totalRiskScore)}점, 추세 붕괴 위험 ${formatScore(input.trendCollapseRisk)}점, VWAP 이탈 위험 ${formatScore(input.vwapBreakdownRisk)}점, VWAP 리스크 ${formatScore(input.vwapRiskScore)}점 기준입니다.`,
       checkPointKo: "전체 점수보다 세부 핵심 위험이 먼저 낮아지는지 확인해야 합니다.",
-      penalty: 18,
+      penalty: 16,
     });
   }
 
@@ -92,7 +92,7 @@ export function analyzeSignalConflicts(input: SignalConflictInput): SignalConfli
       summaryKo: "평균 거래 단가 기준 흐름은 약하지만 거래 참여가 완전히 꺼진 상태는 아닙니다.",
       evidenceKo: `VWAP 점수 ${formatScore(input.vwapScore)}점, 거래량 점수 ${formatScore(input.volumeScore)}점, VWAP 이격률 ${formatPercent(input.vwapDistancePercent)} 기준입니다.`,
       checkPointKo: "거래량이 유지되는 상태에서 VWAP 회복이 실제로 나타나는지 확인해야 합니다.",
-      penalty: 10,
+      penalty: 8,
     });
   }
 
@@ -104,7 +104,7 @@ export function analyzeSignalConflicts(input: SignalConflictInput): SignalConfli
       summaryKo: "장중 흔들림이 큰 상태에서 종가도 약하면 가격 신호의 안정성이 낮아질 수 있습니다.",
       evidenceKo: `변동성 위험 ${formatScore(input.volatilityRisk)}점, 종가 위치 점수 ${formatScore(input.closePositionScore)}점, 장중 변동폭 ${formatPercent(input.intradayRangePercent)} 기준입니다.`,
       checkPointKo: "다음 거래일 변동폭이 줄어들고 종가가 중상단 이상에 남는지 확인해야 합니다.",
-      penalty: 14,
+      penalty: 12,
     });
   }
 
@@ -163,10 +163,10 @@ function getConflictSeverityBooster(input: SignalConflictInput): number {
   let booster = 0;
 
   if (valueOr(input.trendCollapseRisk, 0) >= 80 && valueOr(input.closePositionScore, 50) <= 20) {
-    booster += 8;
+    booster += 6;
   }
   if (valueOr(input.vwapBreakdownRisk, 0) >= 75 && valueOr(input.vwapScore, 50) <= 35) {
-    booster += 5;
+    booster += 4;
   }
 
   return booster;
