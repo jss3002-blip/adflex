@@ -66,8 +66,9 @@ export function scoreVolatilityRisk(context: RiskScoreContext): number {
 
   if (!isFiniteNumber(intradayRangePercent)) return 50;
   if (intradayRangePercent >= 12) return 88;
-  if (intradayRangePercent >= 8) return 74;
-  if (intradayRangePercent >= 5) return 55;
+  if (intradayRangePercent >= 8) return 70;
+  if (intradayRangePercent >= 5) return 52;
+  if (intradayRangePercent >= 3) return 38;
   return 25;
 }
 
@@ -76,31 +77,35 @@ export function scoreDistributionRisk(context: RiskScoreContext): number {
 
   if (
     isFiniteNumber(volumeRatio20d) &&
-    volumeRatio20d >= 300 &&
+    volumeRatio20d >= 250 &&
     isFiniteNumber(upperWickRatio) &&
-    upperWickRatio >= 35 &&
+    upperWickRatio >= 40 &&
     isFiniteNumber(closePositionScore) &&
-    closePositionScore <= 50
+    closePositionScore <= 45
   ) {
     return 90;
   }
 
   if (
     isFiniteNumber(volumeRatio20d) &&
-    volumeRatio20d >= 200 &&
+    volumeRatio20d >= 180 &&
     isFiniteNumber(upperWickRatio) &&
-    upperWickRatio >= 35
+    upperWickRatio >= 35 &&
+    isFiniteNumber(closePositionScore) &&
+    closePositionScore <= 55
   ) {
     return 78;
   }
 
   if (
+    isFiniteNumber(volumeRatio20d) &&
+    volumeRatio20d >= 130 &&
     isFiniteNumber(upperWickRatio) &&
     upperWickRatio >= 45 &&
     isFiniteNumber(closePositionScore) &&
     closePositionScore <= 40
   ) {
-    return 76;
+    return 68;
   }
 
   if (
@@ -112,7 +117,15 @@ export function scoreDistributionRisk(context: RiskScoreContext): number {
     return 68;
   }
 
-  if (isFiniteNumber(upperWickRatio) && upperWickRatio >= 35) return 55;
+  if (
+    isFiniteNumber(upperWickRatio) &&
+    upperWickRatio >= 35 &&
+    isFiniteNumber(volumeRatio20d) &&
+    volumeRatio20d >= 120
+  ) {
+    return 48;
+  }
+
   return 28;
 }
 
@@ -164,7 +177,9 @@ export function scoreTrendCollapseRisk(context: RiskScoreContext): number {
   if (
     isFiniteNumber(closePositionScore) &&
     closePositionScore <= 20 &&
-    isAboveVwap === false
+    isAboveVwap === false &&
+    isFiniteNumber(previousCloseChangePercent) &&
+    previousCloseChangePercent <= -1
   ) {
     return 82;
   }
@@ -185,6 +200,16 @@ export function scoreTrendCollapseRisk(context: RiskScoreContext): number {
     closePositionScore <= 40
   ) {
     return 68;
+  }
+
+  if (
+    isAboveVwap === false &&
+    isFiniteNumber(closePositionScore) &&
+    closePositionScore <= 30 &&
+    isFiniteNumber(previousCloseChangePercent) &&
+    previousCloseChangePercent <= -2
+  ) {
+    return 64;
   }
 
   if (isFiniteNumber(closePositionScore) && closePositionScore <= 20) return 55;

@@ -127,11 +127,12 @@ export function classifyTrueBreakoutCandidate(input: StockStateClassificationInp
 
 export function classifyFalseBreakoutRisk(input: StockStateClassificationInput): number {
   let score = 0;
-  score += addIf(hasScore(input.distributionRiskScore, 70), 28);
-  score += addIf(hasScore(input.upperWickRatio, 35), 18);
-  score += addIf(lowScore(input.closePositionScore, 50), 18);
-  score += addIf(!isFiniteNumber(input.volumeRatio20d) || input.volumeRatio20d >= 180, 16);
-  score += addIf(input.riskScore >= 65, 20);
+  score += addIf(hasScore(input.distributionRiskScore, 70), 30);
+  score += addIf(hasScore(input.upperWickRatio, 35), 14);
+  score += addIf(lowScore(input.closePositionScore, 50), 14);
+  score += addIf(isFiniteNumber(input.volumeRatio20d) && input.volumeRatio20d >= 180, 16);
+  score += addIf(input.riskScore >= 65, 16);
+  score += addIf(hasScore(input.distributionRiskScore, 80) && input.riskScore >= 70, 10);
   return clampScore(score);
 }
 
@@ -174,14 +175,15 @@ export function classifyVwapSupportHolding(input: StockStateClassificationInput)
 
 export function classifyVwapBreakdownWarning(input: StockStateClassificationInput): number {
   let score = 0;
-  score += addIf(input.isAboveVwap === false, 25);
+  score += addIf(input.isAboveVwap === false, 30);
   score += addIf(hasScore(input.vwapBreakdownRiskScore, 65), 25);
   score += addIf(lowScore(input.closePositionScore, 45), 18);
   score += addIf(
-    !isFiniteNumber(input.vwapDistancePercent) || input.vwapDistancePercent <= -2,
+    isFiniteNumber(input.vwapDistancePercent) && input.vwapDistancePercent <= -2,
     12,
   );
-  score += addIf(input.riskScore >= 60, 20);
+  score += addIf(input.riskScore >= 60, 12);
+  if (input.isAboveVwap !== false) return capScore(score, 58);
   return clampScore(score);
 }
 
@@ -217,10 +219,11 @@ export function classifyTrendCollapseRisk(input: StockStateClassificationInput):
   score += addIf(input.isAboveVwap === false, 18);
   score += addIf(lowScore(input.closePositionScore, 35), 16);
   score += addIf(
-    !isFiniteNumber(input.previousCloseChangePercent) || input.previousCloseChangePercent <= -3,
+    isFiniteNumber(input.previousCloseChangePercent) && input.previousCloseChangePercent <= -3,
     8,
   );
-  score += addIf(input.riskScore >= 70, 15);
+  score += addIf(input.riskScore >= 70, 12);
+  if (!hasTrendCollapseConfirmation(input)) return capScore(score, 62);
   return clampScore(score);
 }
 
@@ -345,7 +348,7 @@ function priorityAdjustedScore(
     ["FALSE_BREAKOUT_RISK", "TREND_COLLAPSE_RISK", "VWAP_BREAKDOWN_WARNING"].includes(
       candidate.state,
     ) &&
-    candidate.score >= 75
+    shouldPrioritizeRiskState(candidate, input)
   ) {
     adjusted += 18;
   }
@@ -402,6 +405,9 @@ function applyStateScoreCap(
   }
 
   if (isRiskState(state) && !hasMultipleRiskConfirmations(input)) capped = capScore(capped, 94);
+  if (isPrimaryRiskState(state) && input.riskScore < 60 && !hasVeryHighMatchingRisk(state, input)) {
+    capped = capScore(capped, 85);
+  }
 
   return capped;
 }
@@ -429,6 +435,10 @@ function isRiskState(state: StockStateType): boolean {
     "HIGH_RISK_MOMENTUM",
     "SHORT_TERM_OVERHEATED",
   ].includes(state);
+}
+
+function isPrimaryRiskState(state: StockStateType): boolean {
+  return ["FALSE_BREAKOUT_RISK", "TREND_COLLAPSE_RISK", "VWAP_BREAKDOWN_WARNING"].includes(state);
 }
 
 function hasExceptionalVwapSupport(input: StockStateClassificationInput): boolean {
@@ -459,6 +469,46 @@ function hasMultipleRiskConfirmations(input: StockStateClassificationInput): boo
   ].filter(Boolean).length;
 
   return confirmationCount >= 2;
+}
+
+function shouldPrioritizeRiskState(
+  candidate: StateCandidate,
+  input: StockStateClassificationInput,
+): boolean {
+  if (candidate.state === "FALSE_BREAKOUT_RISK") {
+    return candidate.score >= 78 || hasScore(input.distributionRiskScore, 75);
+  }
+
+  if (candidate.state === "TREND_COLLAPSE_RISK") {
+    return candidate.score >= 78 || hasScore(input.trendCollapseRiskScore, 75);
+  }
+
+  if (candidate.state === "VWAP_BREAKDOWN_WARNING") {
+    return candidate.score >= 78 || hasScore(input.vwapBreakdownRiskScore, 75);
+  }
+
+  return false;
+}
+
+function hasVeryHighMatchingRisk(
+  state: StockStateType,
+  input: StockStateClassificationInput,
+): boolean {
+  if (state === "FALSE_BREAKOUT_RISK") return hasScore(input.distributionRiskScore, 80);
+  if (state === "TREND_COLLAPSE_RISK") return hasScore(input.trendCollapseRiskScore, 80);
+  if (state === "VWAP_BREAKDOWN_WARNING") return hasScore(input.vwapBreakdownRiskScore, 80);
+  return false;
+}
+
+function hasTrendCollapseConfirmation(input: StockStateClassificationInput): boolean {
+  return (
+    hasScore(input.trendCollapseRiskScore, 70) &&
+    (lowScore(input.week52PositionScore, 20) ||
+      lowScore(input.closePositionScore, 25) ||
+      (input.isAboveVwap === false &&
+        isFiniteNumber(input.previousCloseChangePercent) &&
+        input.previousCloseChangePercent <= -2))
+  );
 }
 
 function buildSummary(state: StockStateType, input: StockStateClassificationInput): string {

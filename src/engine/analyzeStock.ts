@@ -96,14 +96,23 @@ export function determineFinalGrade(
   finalScore: number,
   riskScore: number,
   confidenceScore: number,
+  primaryState?: string,
+  actionCode?: string,
 ): StockAnalysisGrade {
+  const hasCautionSignal = isCautionState(primaryState) || isCautionAction(actionCode);
+  const hasClearStateOrAction = Boolean(primaryState || actionCode);
+
   if (riskScore >= 80) return "HIGH_RISK_STRUCTURE";
-  if (confidenceScore < 40) return "UNCLEAR_STRUCTURE";
-  if (finalScore >= 80 && riskScore < 60) return "EXCELLENT_STRUCTURE";
-  if (finalScore >= 65 && riskScore < 70) return "GOOD_STRUCTURE";
   if (riskScore >= 65) return "CAUTION_STRUCTURE";
+  if (riskScore >= 45 && hasCautionSignal) return "CAUTION_STRUCTURE";
+  if (confidenceScore < 40 && riskScore < 45 && !hasCautionSignal) return "UNCLEAR_STRUCTURE";
+  if (finalScore < 40 && riskScore < 45 && !hasClearStateOrAction) return "UNCLEAR_STRUCTURE";
+  if (finalScore >= 80 && riskScore < 60 && !hasCautionSignal) return "EXCELLENT_STRUCTURE";
+  if (finalScore >= 65 && riskScore < 70 && !(hasCautionSignal && riskScore >= 45)) {
+    return "GOOD_STRUCTURE";
+  }
   if (finalScore >= 45) return "NEUTRAL_STRUCTURE";
-  return "UNCLEAR_STRUCTURE";
+  return hasCautionSignal ? "CAUTION_STRUCTURE" : "NEUTRAL_STRUCTURE";
 }
 
 export function buildRiskContext(
@@ -222,12 +231,12 @@ export function generateFinalSummary(
     case "NEUTRAL_STRUCTURE":
       return `현재 종합 구조는 중립에 가까우며, 가격·거래량·VWAP 중 일부 조건의 추가 확인이 필요합니다. ${scoreText} ${stateText}`;
     case "CAUTION_STRUCTURE":
-      return `현재 종합 구조에는 주의가 필요한 신호가 포함되어 있으며, 리스크 조건과 변동성 확대 여부를 우선 점검해야 합니다. ${scoreText} ${stateText}`;
+      return `현재 종합 구조에는 주의가 필요한 신호가 포함되어 있습니다. 특히 VWAP 이탈, 약한 종가 위치, 변동성 확대 여부를 함께 점검해야 합니다. ${scoreText} ${stateText}`;
     case "HIGH_RISK_STRUCTURE":
       return `현재 리스크 점수가 높아 단순한 긍정 흐름으로 해석하기 어렵습니다. 과열, 이탈, 분배 가능성을 함께 점검해야 합니다. ${scoreText} ${stateText}`;
     case "UNCLEAR_STRUCTURE":
     default:
-      return `현재 점수 조합만으로는 명확한 방향성 우위를 판단하기 어렵습니다. 추가 데이터와 다음 흐름 확인이 필요합니다. ${scoreText} ${stateText}`;
+      return `현재 점수 조합만으로는 명확한 우위나 위험 방향을 단정하기 어렵습니다. 추가 데이터와 다음 흐름 확인이 필요합니다. ${scoreText} ${stateText}`;
   }
 }
 
@@ -279,7 +288,13 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     state.stateScore,
     action.actionScore,
   );
-  const finalGrade = determineFinalGrade(finalScore, risk.riskScore, state.confidenceScore);
+  const finalGrade = determineFinalGrade(
+    finalScore,
+    risk.riskScore,
+    state.confidenceScore,
+    state.primaryState,
+    action.actionCode,
+  );
 
   return {
     normalized,
@@ -336,4 +351,27 @@ function collectEvidence(carriers: EvidenceCarrier[], key: keyof EvidenceBucket)
   }
 
   return collected;
+}
+
+function isCautionState(state: string | undefined): boolean {
+  return [
+    "FALSE_BREAKOUT_RISK",
+    "SHORT_TERM_OVERHEATED",
+    "VWAP_BREAKDOWN_WARNING",
+    "TREND_COLLAPSE_RISK",
+    "HIGH_RISK_MOMENTUM",
+    "WEAK_PARTICIPATION",
+  ].includes(state || "");
+}
+
+function isCautionAction(actionCode: string | undefined): boolean {
+  return [
+    "RISK_CHECK_REQUIRED",
+    "FALSE_BREAKOUT_CAUTION",
+    "HIGH_RISK_MOMENTUM_CAUTION",
+    "VWAP_BREAKDOWN_CHECK",
+    "TREND_COLLAPSE_CHECK",
+    "OVERHEAT_CAUTION",
+    "WEAK_PARTICIPATION_CHECK",
+  ].includes(actionCode || "");
 }

@@ -1,5 +1,6 @@
 import type { StockAnalysisInput } from "@/src/engine/types";
 import type { StockSymbolInfo } from "./stockSymbolMap";
+import type { StockDataFreshness } from "./stockDataProvider.types";
 
 type YahooQuote = {
   open?: Array<number | null>;
@@ -60,6 +61,12 @@ export type YahooProviderDiagnostics = {
   firstCandleDate?: string;
   latestCandleDate?: string;
   note: string;
+};
+
+type YahooDiagnosticStockInput = StockAnalysisInput & {
+  metadata?: StockAnalysisInput["metadata"] & {
+    providerDiagnostics?: YahooProviderDiagnostics;
+  };
 };
 
 export async function fetchYahooFinanceStockInput(params: {
@@ -249,12 +256,58 @@ function buildProviderDiagnostics(params: {
   };
 }
 
+export function getYahooProviderDiagnostics(
+  input: StockAnalysisInput,
+): YahooProviderDiagnostics | undefined {
+  return (input as YahooDiagnosticStockInput).metadata?.providerDiagnostics;
+}
+
+export function buildYahooFreshness(input: StockAnalysisInput): StockDataFreshness {
+  const diagnostics = getYahooProviderDiagnostics(input);
+  const baseDateTime = diagnostics?.latestCandleDate || input.asOf;
+  const baseDate = toDateOnly(baseDateTime);
+
+  return {
+    provider: "yahoo-finance",
+    mode: "EOD",
+    isRealtime: false,
+    isSameDayData: isSameSeoulDate(baseDateTime),
+    isConfirmedEOD: true,
+    baseDate,
+    baseDateTime,
+    timezone: "Asia/Seoul",
+    sourceLabel: "Yahoo Finance",
+    cautionMessage:
+      "Yahoo Finance 기준 차트 데이터이며, 거래소 및 데이터 제공 환경에 따라 지연되거나 조정된 값이 포함될 수 있습니다.",
+  };
+}
+
 function isStaleDailyCandle(value: string): boolean {
   const timestamp = new Date(value).getTime();
   if (!Number.isFinite(timestamp)) return false;
 
   const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
   return Date.now() - timestamp > sevenDaysMs;
+}
+
+function toDateOnly(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value.slice(0, 10);
+  return date.toISOString().slice(0, 10);
+}
+
+function isSameSeoulDate(value: string): boolean {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return false;
+
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  return formatter.format(date) === formatter.format(new Date());
 }
 
 function average(values: number[]): number {

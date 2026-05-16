@@ -423,6 +423,22 @@ function applyActionScoreCap(
     score = 94;
   }
 
+  if (riskActionCodes.includes(actionCode)) {
+    const matchingRiskScore = getMatchingRiskMetric(input, actionCode);
+
+    if (input.riskScore < 60) score = Math.min(score, 88);
+    if (input.riskScore < 65 && input.confidenceScore < 65) score = Math.min(score, 90);
+    if (!(input.riskScore >= 70 && matchingRiskScore >= 80)) score = Math.min(score, 94);
+    if (
+      ["FALSE_BREAKOUT_CAUTION", "TREND_COLLAPSE_CHECK", "VWAP_BREAKDOWN_CHECK", "OVERHEAT_CAUTION"].includes(
+        actionCode,
+      ) &&
+      !(matchingRiskScore >= 75 && input.riskScore >= 65 && (input.confidenceScore >= 60 || input.stateScore >= 85))
+    ) {
+      score = Math.min(score, 90);
+    }
+  }
+
   if (score >= 100 && !hasExceptionalMonitorConfirmation(input) && !hasAlignedRiskConfirmation(input)) {
     score = 95;
   }
@@ -477,4 +493,24 @@ function hasElevatedRiskMetric(input: ActionCodeInput): boolean {
     valueAtLeast(input.volatilityRiskScore, 70) ||
     valueAtLeast(input.overheatingRiskScore, 70)
   );
+}
+
+function getMatchingRiskMetric(input: ActionCodeInput, actionCode: StockActionCode): number {
+  if (actionCode === "TREND_COLLAPSE_CHECK") return valueOr(input.trendCollapseRiskScore, 0);
+  if (actionCode === "FALSE_BREAKOUT_CAUTION") return valueOr(input.distributionRiskScore, 0);
+  if (actionCode === "VWAP_BREAKDOWN_CHECK") return valueOr(input.vwapBreakdownRiskScore, 0);
+  if (actionCode === "OVERHEAT_CAUTION") return valueOr(input.overheatingRiskScore, 0);
+  if (actionCode === "HIGH_RISK_MOMENTUM_CAUTION") {
+    return Math.max(
+      valueOr(input.volatilityRiskScore, 0),
+      valueOr(input.distributionRiskScore, 0),
+      valueOr(input.overheatingRiskScore, 0),
+    );
+  }
+  if (actionCode === "RISK_CHECK_REQUIRED") return input.riskScore;
+  if (actionCode === "WEAK_PARTICIPATION_CHECK") {
+    return valueOr(input.lowLiquidityOrWeakParticipationRiskScore, 0);
+  }
+
+  return input.riskScore;
 }

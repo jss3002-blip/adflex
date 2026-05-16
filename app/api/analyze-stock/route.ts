@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { analyzeStock } from "@/src/engine/analyzeStock";
 import { sampleStockInput } from "@/src/data/sampleStockInput";
-import { resolveStockSymbol } from "@/src/data/stockSymbolMap";
-import { fetchYahooFinanceStockInput } from "@/src/data/yahooFinanceProvider";
+import { buildSampleFreshness, getStockDataForAnalysis } from "@/src/data/stockDataProvider";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
@@ -16,8 +15,9 @@ export async function GET() {
     return NextResponse.json(
       {
         success: true,
-        mode: "sample",
+        mode: "SAMPLE",
         source: "sample",
+        freshness: buildSampleFreshness("SAMPLE"),
         data: result,
       },
       { status: 200, headers: JSON_HEADERS },
@@ -33,55 +33,61 @@ export async function POST(req: Request) {
     const stockName = getStockName(body);
 
     if (!stockName) {
+      const freshness = buildSampleFreshness("SAMPLE");
       const result = analyzeStock(sampleStockInput);
 
       return NextResponse.json(
         {
           success: true,
-          mode: "sample",
-          source: "sample",
+          mode: freshness.mode,
+          source: freshness.provider,
+          freshness,
           data: result,
         },
         { status: 200, headers: JSON_HEADERS },
-      );
-    }
-
-    const resolvedStock = resolveStockSymbol(stockName);
-
-    if (!resolvedStock) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "지원하지 않는 종목명입니다.",
-          detail: "현재 등록된 종목명 또는 별칭을 입력해 주세요.",
-        },
-        { status: 400, headers: JSON_HEADERS },
       );
     }
 
     try {
-      const realInput = await fetchYahooFinanceStockInput({ stock: resolvedStock });
-      const result = analyzeStock(realInput);
+      const providerResult = await getStockDataForAnalysis({
+        stockName,
+        provider: "yahoo-finance",
+      });
+      const result = analyzeStock(providerResult.input);
 
       return NextResponse.json(
         {
           success: true,
-          mode: "real-data",
-          source: "yahoo-finance",
-          stock: resolvedStock,
+          mode: providerResult.freshness.mode,
+          source: providerResult.freshness.provider,
+          freshness: providerResult.freshness,
+          diagnostics: providerResult.diagnostics,
+          warning: providerResult.warning,
           data: result,
         },
         { status: 200, headers: JSON_HEADERS },
       );
-    } catch {
+    } catch (error) {
+      if (getErrorMessage(error) === "UNSUPPORTED_STOCK_SYMBOL") {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "지원하지 않는 종목명입니다.",
+            detail: "현재 등록된 종목명 또는 별칭을 입력해 주세요.",
+          },
+          { status: 400, headers: JSON_HEADERS },
+        );
+      }
+
+      const freshness = buildSampleFreshness("FALLBACK");
       const result = analyzeStock(sampleStockInput);
 
       return NextResponse.json(
         {
           success: true,
-          mode: "sample-fallback",
-          source: "sample",
-          stock: resolvedStock,
+          mode: freshness.mode,
+          source: freshness.provider,
+          freshness,
           warning: "실제 시세 데이터를 가져오지 못해 샘플 데이터로 대체했습니다.",
           data: result,
         },
