@@ -1,0 +1,42 @@
+{
+  "domain": "financial",
+  "description": "Controls financial health, distress, and earnings surprise variables.",
+  "variables": {
+    "debt_risk_score": {
+      "type": "risk",
+      "description": "Scores balance sheet risk from leverage and interest coverage.",
+      "inputs": ["debtToEquity", "interestCoverage", "cashRatio"],
+      "formula": "debt_model(debtToEquity, interestCoverage, cashRatio)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "warning:31-60", "critical:61-100"],
+      "scoreGroup": ["FinancialScore", "RiskScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 12 },
+      "backtestLabels": ["avoid_success_label", "max_drawdown_5d"]
+    },
+    "financial_distress_risk": {
+      "type": "risk",
+      "description": "Estimates broad financial distress risk using profitability, debt, liquidity, and audit flags.",
+      "inputs": ["operatingMargin", "debtRiskScore", "cashRunway", "auditOpinion"],
+      "formula": "distress_model(operatingMargin, debtRiskScore, cashRunway, auditOpinion)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "high:31-70", "critical:71-100"],
+      "scoreGroup": ["FinancialScore", "RiskScore"],
+      "thresholdRef": "risk-thresholds.financial_distress_risk",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 15 },
+      "backtestLabels": ["avoid_success_label", "risk_reduction_success_label"]
+    },
+    "earnings_surprise_score": {
+      "type": "score",
+      "description": "Scores positive or negative surprise relative to consensus and prior trend.",
+      "inputs": ["reportedEarnings", "consensusEarnings", "revenueGrowth"],
+      "formula": "surprise_score(reportedEarnings, consensusEarnings, revenueGrowth)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["negative:0-35", "inline:36-65", "positive:66-100"],
+      "scoreGroup": ["FinancialScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 12 },
+      "backtestLabels": ["return_5d", "return_20d"]
+    }
+  }
+}

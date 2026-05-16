@@ -1,0 +1,42 @@
+{
+  "domain": "breakout",
+  "description": "Controls breakout quality, false breakout risk, and reliability variables.",
+  "variables": {
+    "true_breakout_probability": {
+      "type": "probability",
+      "description": "Estimates probability that a breakout is supported by volume, close quality, and follow-through.",
+      "inputs": ["resistanceLevel", "close", "volumeRatio20d", "closePositionScore"],
+      "formula": "probability_model(close > resistanceLevel, volumeRatio20d, closePositionScore)",
+      "normalization": "probability_0_1",
+      "scoreBands": ["weak:0-0.39", "watch:0.40-0.69", "strong:0.70-1"],
+      "scoreGroup": ["BreakoutScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["breakout_success_label", "target_hit_label"]
+    },
+    "false_breakout_risk": {
+      "type": "risk",
+      "description": "Measures breakout failure risk from upper wick, weak close, and volume climax.",
+      "inputs": ["upperWickRatio", "closePositionScore", "volumeClimaxScore"],
+      "formula": "weighted_sum(upperWickRatio, inverse(closePositionScore), volumeClimaxScore)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "warning:31-60", "critical:61-100"],
+      "scoreGroup": ["BreakoutScore", "RiskScore"],
+      "thresholdRef": "risk-thresholds.false_breakout_risk",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["false_breakout_label", "stop_before_target_label"]
+    },
+    "breakout_reliability_score": {
+      "type": "score",
+      "description": "Scores breakout quality after penalizing overlap and failure signals.",
+      "inputs": ["trueBreakoutProbability", "falseBreakoutRisk", "volumePersistenceScore"],
+      "formula": "trueBreakoutProbability * 100 - falseBreakoutRisk * 0.4 + volumePersistenceScore * 0.2",
+      "normalization": "clip_0_100",
+      "scoreBands": ["unreliable:0-40", "mixed:41-70", "reliable:71-100"],
+      "scoreGroup": ["BreakoutScore", "ConfidenceScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["breakout_success_label", "return_5d"]
+    }
+  }
+}

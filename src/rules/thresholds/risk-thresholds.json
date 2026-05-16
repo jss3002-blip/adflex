@@ -1,0 +1,26 @@
+{
+  "domain": "risk-thresholds",
+  "description": "Warning, high, and critical thresholds for major risk variables.",
+  "thresholds": {
+    "RiskScore": {
+      "warning": { "min": 45, "max": 59 },
+      "high": { "min": 60, "max": 79 },
+      "critical": { "min": 80 }
+    },
+    "liquidity_risk_score": {
+      "warning": { "min": 40, "max": 59 },
+      "high": { "min": 60, "max": 79 },
+      "critical": { "min": 80 }
+    },
+    "data_quality_risk": {
+      "warning": { "min": 35, "max": 54 },
+      "high": { "min": 55, "max": 74 },
+      "critical": { "min": 75 }
+    },
+    "false_breakout_risk": {
+      "warning": { "min": 40, "max": 59 },
+      "high": { "min": 60, "max": 79 },
+      "critical": { "min": 80 }
+    }
+  }
+}

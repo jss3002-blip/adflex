@@ -1,0 +1,42 @@
+{
+  "domain": "intraday",
+  "description": "Controls intraday range, multi-timeframe alignment, and reversal variables.",
+  "variables": {
+    "intraday_range_rate": {
+      "type": "ratio",
+      "description": "Measures current intraday high-low range versus previous close.",
+      "inputs": ["dayHigh", "dayLow", "previousClose"],
+      "formula": "(dayHigh - dayLow) / previousClose",
+      "normalization": "percentage",
+      "scoreBands": ["quiet:0-0.02", "active:0.021-0.06", "extreme:0.061+"],
+      "scoreGroup": ["IntradayScore", "RiskScore"],
+      "thresholdRef": "price-thresholds.intraday_range_rate",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["max_gain_1d", "max_drawdown_1d"]
+    },
+    "intraday_mtf_alignment_score": {
+      "type": "score",
+      "description": "Scores alignment across 1-minute, 5-minute, and daily structures.",
+      "inputs": ["minute1Trend", "minute5Trend", "dailyTrend"],
+      "formula": "alignment_score(minute1Trend, minute5Trend, dailyTrend)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["conflicted:0-35", "mixed:36-65", "aligned:66-100"],
+      "scoreGroup": ["IntradayScore", "TrendScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["return_1d", "target_hit_label"]
+    },
+    "intraday_reversal_probability": {
+      "type": "probability",
+      "description": "Estimates probability of intraday reversal after extension or failed breakdown.",
+      "inputs": ["rangeRate", "vwapStatus", "wickRatio", "volumeRatio"],
+      "formula": "reversal_probability(rangeRate, vwapStatus, wickRatio, volumeRatio)",
+      "normalization": "probability_0_1",
+      "scoreBands": ["low:0-0.35", "watch:0.36-0.65", "high:0.66-1"],
+      "scoreGroup": ["IntradayScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["dead_cat_bounce_label", "return_1d"]
+    }
+  }
+}

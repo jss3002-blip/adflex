@@ -1,0 +1,30 @@
+{
+  "domain": "action-thresholds",
+  "description": "Representative thresholds used by future ActionCode decisions.",
+  "thresholds": {
+    "OpportunityScore": {
+      "weak": { "max": 49 },
+      "watch": { "min": 50, "max": 64 },
+      "actionable": { "min": 65, "max": 79 },
+      "strong": { "min": 80 }
+    },
+    "RiskScore": {
+      "acceptable": { "max": 44 },
+      "warning": { "min": 45, "max": 59 },
+      "high": { "min": 60, "max": 79 },
+      "blocked": { "min": 80 }
+    },
+    "ConfidenceScore": {
+      "low": { "max": 49 },
+      "medium": { "min": 50, "max": 69 },
+      "high": { "min": 70, "max": 84 },
+      "very_high": { "min": 85 }
+    },
+    "FinalScore": {
+      "avoid": { "max": 39 },
+      "watch": { "min": 40, "max": 59 },
+      "candidate": { "min": 60, "max": 74 },
+      "priority": { "min": 75 }
+    }
+  }
+}

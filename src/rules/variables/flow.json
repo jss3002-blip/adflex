@@ -1,0 +1,42 @@
+{
+  "domain": "flow",
+  "description": "Controls investor flow variables for foreign, institution, and retail behavior.",
+  "variables": {
+    "foreign_flow_score": {
+      "type": "score",
+      "description": "Scores foreign investor net buying strength and persistence.",
+      "inputs": ["foreignNetBuy", "tradingValue", "foreignFlowSeries"],
+      "formula": "flow_strength(foreignNetBuy / tradingValue, foreignFlowSeries)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["selling:0-35", "neutral:36-65", "accumulating:66-100"],
+      "scoreGroup": ["FlowScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["return_5d", "target_before_stop_label"]
+    },
+    "institution_flow_score": {
+      "type": "score",
+      "description": "Scores institutional accumulation or distribution pressure.",
+      "inputs": ["institutionNetBuy", "tradingValue", "institutionFlowSeries"],
+      "formula": "flow_strength(institutionNetBuy / tradingValue, institutionFlowSeries)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["distribution:0-35", "neutral:36-65", "accumulation:66-100"],
+      "scoreGroup": ["FlowScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["return_10d", "distribution_layer_label"]
+    },
+    "retail_chasing_risk": {
+      "type": "risk",
+      "description": "Estimates risk that late retail inflow is chasing an exhausted move.",
+      "inputs": ["retailNetBuy", "priceExtensionRate", "volumeClimaxScore"],
+      "formula": "risk_if(retailNetBuy > 0 and priceExtensionRate high) + volumeClimaxScore * 0.4",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "warning:31-60", "critical:61-100"],
+      "scoreGroup": ["FlowScore", "RiskScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["false_breakout_label", "max_drawdown_3d"]
+    }
+  }
+}

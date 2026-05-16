@@ -1,0 +1,20 @@
+{
+  "domain": "data-quality-gates",
+  "description": "Representative data quality weights for deciding confidence penalties and analysis exclusion.",
+  "qualityWeights": {
+    "priceDataCompleteness": { "weight": 0.16, "minimum": 0.98, "criticalBelow": 0.9 },
+    "volumeDataCompleteness": { "weight": 0.12, "minimum": 0.97, "criticalBelow": 0.88 },
+    "minuteDataCompleteness": { "weight": 0.12, "minimum": 0.95, "criticalBelow": 0.82 },
+    "vwapAvailability": { "weight": 0.1, "minimum": 0.95, "criticalBelow": 0.8 },
+    "orderbookAvailability": { "weight": 0.1, "minimum": 0.9, "criticalBelow": 0.7 },
+    "flowFreshness": { "weight": 0.11, "minimum": 0.9, "criticalBelow": 0.65 },
+    "newsDisclosureReliability": { "weight": 0.11, "minimum": 0.85, "criticalBelow": 0.6 },
+    "financialFreshness": { "weight": 0.1, "minimum": 0.85, "criticalBelow": 0.55 },
+    "backtestConsistency": { "weight": 0.08, "minimum": 0.8, "criticalBelow": 0.5 }
+  },
+  "gateActions": {
+    "degradeConfidence": "qualityScore < 85",
+    "requireHumanReview": "qualityScore < 70",
+    "excludeAnalysis": "qualityScore < 55"
+  }
+}

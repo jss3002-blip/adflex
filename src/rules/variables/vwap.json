@@ -1,0 +1,42 @@
+{
+  "domain": "vwap",
+  "description": "Controls VWAP hold, reclaim, and intraday VWAP-loss risk variables.",
+  "variables": {
+    "vwap_hold_score": {
+      "type": "score",
+      "description": "Scores whether price is holding above session VWAP with acceptable pullbacks.",
+      "inputs": ["currentPrice", "sessionVwap", "minuteClose"],
+      "formula": "hold_strength(currentPrice, sessionVwap, minuteClose)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["lost:0-35", "testing:36-65", "holding:66-100"],
+      "scoreGroup": ["VWAPScore", "IntradayScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 12 },
+      "backtestLabels": ["vwap_hold_label", "return_1d"]
+    },
+    "vwap_reclaim_score": {
+      "type": "score",
+      "description": "Scores quality of reclaiming VWAP after an intraday loss.",
+      "inputs": ["currentPrice", "sessionVwap", "volumeRatio"],
+      "formula": "reclaim_quality(currentPrice > sessionVwap, volumeRatio)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["failed:0-35", "neutral:36-65", "confirmed:66-100"],
+      "scoreGroup": ["VWAPScore", "BreakoutScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 12 },
+      "backtestLabels": ["target_hit_label", "return_3d"]
+    },
+    "minute_vwap_loss_risk": {
+      "type": "risk",
+      "description": "Detects fast intraday risk when minute bars fail below VWAP.",
+      "inputs": ["minuteClose", "sessionVwap", "minuteVolume"],
+      "formula": "risk_if(consecutive(minuteClose < sessionVwap) >= 3) * volume_weight(minuteVolume)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "warning:31-60", "critical:61-100"],
+      "scoreGroup": ["VWAPScore", "RiskScore"],
+      "thresholdRef": "risk-thresholds.minute_vwap_loss_risk",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 12 },
+      "backtestLabels": ["stop_loss_hit_label", "max_drawdown_1d"]
+    }
+  }
+}

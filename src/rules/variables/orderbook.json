@@ -1,0 +1,42 @@
+{
+  "domain": "orderbook",
+  "description": "Controls orderbook imbalance, spread risk, and fake liquidity variables.",
+  "variables": {
+    "orderbook_imbalance_score": {
+      "type": "score",
+      "description": "Scores bid/ask imbalance after depth quality adjustment.",
+      "inputs": ["bidDepth", "askDepth", "depthLevels"],
+      "formula": "(bidDepth - askDepth) / (bidDepth + askDepth)",
+      "normalization": "imbalance_to_score",
+      "scoreBands": ["ask_heavy:0-35", "balanced:36-65", "bid_heavy:66-100"],
+      "scoreGroup": ["OrderbookScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 15 },
+      "backtestLabels": ["return_1d", "target_hit_label"]
+    },
+    "spread_risk_score": {
+      "type": "risk",
+      "description": "Measures execution risk from bid-ask spread width.",
+      "inputs": ["bestBid", "bestAsk", "currentPrice"],
+      "formula": "(bestAsk - bestBid) / currentPrice",
+      "normalization": "risk_percentage_to_score",
+      "scoreBands": ["low:0-30", "warning:31-60", "critical:61-100"],
+      "scoreGroup": ["OrderbookScore", "RiskScore"],
+      "thresholdRef": "risk-thresholds.spread_risk_score",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 15 },
+      "backtestLabels": ["avoid_success_label", "max_drawdown_1d"]
+    },
+    "fake_liquidity_score": {
+      "type": "risk",
+      "description": "Detects unstable visible liquidity that disappears near execution.",
+      "inputs": ["orderbookSnapshots", "cancelRate", "tradeThroughRate"],
+      "formula": "fake_liquidity(cancelRate, tradeThroughRate, orderbookSnapshots)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "medium:31-60", "high:61-100"],
+      "scoreGroup": ["OrderbookScore", "RiskScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 15 },
+      "backtestLabels": ["risk_reduction_success_label", "avoid_success_label"]
+    }
+  }
+}

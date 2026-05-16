@@ -1,0 +1,52 @@
+{
+  "domain": "score-weights",
+  "description": "Representative weights for OpportunityScore, RiskScore, ConfidenceScore, and FinalScore aggregation.",
+  "scores": {
+    "OpportunityScore": {
+      "weights": {
+        "PriceStateScore": 0.12,
+        "TrendScore": 0.14,
+        "VWAPScore": 0.1,
+        "BreakoutScore": 0.16,
+        "VolumeScore": 0.12,
+        "FlowScore": 0.1,
+        "SectorScore": 0.08,
+        "NewsDisclosureScore": 0.08,
+        "FinancialScore": 0.06,
+        "SentimentScore": 0.04
+      }
+    },
+    "RiskScore": {
+      "weights": {
+        "RiskScore": 0.32,
+        "FinancialScore": 0.16,
+        "OrderbookScore": 0.12,
+        "MacroScore": 0.1,
+        "SentimentScore": 0.1,
+        "BreakoutScore": 0.08,
+        "VolumeScore": 0.06,
+        "ProgramScore": 0.06
+      }
+    },
+    "ConfidenceScore": {
+      "weights": {
+        "ConfidenceScore": 0.28,
+        "VolumeScore": 0.14,
+        "FlowScore": 0.14,
+        "TrendScore": 0.12,
+        "SectorScore": 0.1,
+        "NewsDisclosureScore": 0.1,
+        "OrderbookScore": 0.06,
+        "FinancialScore": 0.06
+      }
+    },
+    "FinalScore": {
+      "formula": "OpportunityScore * 0.55 + ConfidenceScore * 0.25 - RiskScore * 0.2",
+      "weights": {
+        "OpportunityScore": 0.55,
+        "ConfidenceScore": 0.25,
+        "RiskScore": -0.2
+      }
+    }
+  }
+}

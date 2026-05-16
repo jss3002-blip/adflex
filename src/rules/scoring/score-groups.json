@@ -1,0 +1,23 @@
+{
+  "domain": "score-groups",
+  "description": "Defines scalable score group metadata for StockAI rule aggregation.",
+  "scoreGroups": {
+    "PriceStateScore": { "description": "Price location, candle quality, and short-term price behavior.", "defaultWeight": 0.08 },
+    "TrendScore": { "description": "Moving average alignment, slope, and trend stability.", "defaultWeight": 0.09 },
+    "VWAPScore": { "description": "VWAP hold, reclaim, and intraday institutional reference behavior.", "defaultWeight": 0.07 },
+    "BreakoutScore": { "description": "Breakout probability, reliability, and failure risk.", "defaultWeight": 0.09 },
+    "VolumeScore": { "description": "Volume expansion, persistence, and exhaustion signals.", "defaultWeight": 0.08 },
+    "IntradayScore": { "description": "Intraday range, reversal, and multi-timeframe alignment.", "defaultWeight": 0.06 },
+    "OrderbookScore": { "description": "Orderbook imbalance, spread, and liquidity quality.", "defaultWeight": 0.05 },
+    "FlowScore": { "description": "Foreign, institution, retail, and capital flow behavior.", "defaultWeight": 0.07 },
+    "ProgramScore": { "description": "Program trading pressure and support.", "defaultWeight": 0.04 },
+    "ShortSellingScore": { "description": "Short interest and squeeze-related signals.", "defaultWeight": 0.04 },
+    "NewsDisclosureScore": { "description": "News impact and disclosure reliability.", "defaultWeight": 0.06 },
+    "FinancialScore": { "description": "Financial health, distress, and earnings surprise.", "defaultWeight": 0.07 },
+    "SectorScore": { "description": "Sector strength, breadth, and rotation.", "defaultWeight": 0.06 },
+    "MacroScore": { "description": "Rates, FX, and macro event risk.", "defaultWeight": 0.05 },
+    "SentimentScore": { "description": "Crowd behavior, FOMO, and narrative fatigue.", "defaultWeight": 0.04 },
+    "RiskScore": { "description": "Downside, liquidity, quality, and listing risk.", "defaultWeight": 0.12 },
+    "ConfidenceScore": { "description": "Data reliability and independent signal confirmation.", "defaultWeight": 0.03 }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "domain": "price-thresholds",
+  "description": "Representative thresholds for price, candle position, and intraday range interpretation.",
+  "thresholds": {
+    "close_position_score": {
+      "description": "Close location inside candle range.",
+      "bands": {
+        "weak": { "min": 0, "max": 35 },
+        "neutral": { "min": 36, "max": 65 },
+        "strong": { "min": 66, "max": 100 }
+      }
+    },
+    "upper_wick_ratio": {
+      "description": "Upper wick pressure ratio.",
+      "bands": {
+        "low": { "max": 0.15 },
+        "mid": { "min": 0.16, "max": 0.35 },
+        "hi": { "min": 0.36, "max": 0.55 },
+        "critical": { "min": 0.56 }
+      }
+    },
+    "intraday_range_rate": {
+      "description": "Intraday range relative to prior close.",
+      "bands": {
+        "lo": { "max": 0.02 },
+        "mid": { "min": 0.021, "max": 0.06 },
+        "hi": { "min": 0.061, "max": 0.1 },
+        "critical": { "min": 0.101 }
+      }
+    },
+    "price_position_52w_score": {
+      "description": "Current price position within 52-week range.",
+      "bands": {
+        "bottom_zone": { "min": 0, "max": 25 },
+        "middle_zone": { "min": 26, "max": 70 },
+        "near_high": { "min": 71, "max": 90 },
+        "breakout_zone": { "min": 91, "max": 100 }
+      }
+    }
+  }
+}

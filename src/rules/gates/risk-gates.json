@@ -1,0 +1,31 @@
+{
+  "domain": "risk-gates",
+  "description": "Representative risk gates for blocking, downgrading, or escalating ActionCode decisions.",
+  "gates": {
+    "Critical Gate": {
+      "action": "block_analysis_or_exit_priority",
+      "conditions": [
+        "trading_halt_risk >= 90",
+        "delisting_risk >= 80",
+        "audit_opinion_risk >= 85",
+        "data_quality_collapse == true"
+      ],
+      "allowedActionCodes": ["ANALYSIS_EXCLUDED", "EXIT_PRIORITY", "HUMAN_REVIEW"]
+    },
+    "High Risk Gate": {
+      "action": "block_new_buy_and_reduce_risk",
+      "conditions": ["liquidity_vacuum_risk >= 75", "RiskScore >= 80", "false_breakout_risk >= 80"],
+      "allowedActionCodes": ["RISK_REDUCTION", "EXIT_PRIORITY", "AVOID", "HUMAN_REVIEW"]
+    },
+    "Medium Risk Gate": {
+      "action": "require_confirmation",
+      "conditions": ["RiskScore >= 60", "spread_risk_score >= 60", "macro_event_risk_score >= 60"],
+      "allowedActionCodes": ["WAIT_CONFIRMATION", "WATCHLIST", "HOLD", "PARTIAL_PROFIT_TAKING"]
+    },
+    "Warning Gate": {
+      "action": "add_warning_message",
+      "conditions": ["RiskScore >= 45", "volume_climax_score >= 65", "fomo_risk >= 60"],
+      "allowedActionCodes": ["BUY_ON_PULLBACK", "WAIT_CONFIRMATION", "WATCHLIST", "HOLD"]
+    }
+  }
+}

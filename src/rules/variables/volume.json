@@ -1,0 +1,42 @@
+{
+  "domain": "volume",
+  "description": "Controls volume expansion, persistence, and climax variables.",
+  "variables": {
+    "volume_ratio_20d": {
+      "type": "ratio",
+      "description": "Compares current volume with the 20-day average volume.",
+      "inputs": ["currentVolume", "averageVolume20d"],
+      "formula": "currentVolume / averageVolume20d",
+      "normalization": "ratio",
+      "scoreBands": ["low:0-0.8", "normal:0.81-1.5", "expanded:1.51+"],
+      "scoreGroup": ["VolumeScore"],
+      "thresholdRef": "volume-thresholds.volume_ratio_20d",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 5 },
+      "backtestLabels": ["return_1d", "breakout_success_label"]
+    },
+    "volume_persistence_score": {
+      "type": "score",
+      "description": "Scores whether elevated volume persists across multiple bars or sessions.",
+      "inputs": ["volumeRatioSeries", "closeSeries"],
+      "formula": "persistence_score(volumeRatioSeries, closeSeries)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["one_off:0-35", "moderate:36-65", "persistent:66-100"],
+      "scoreGroup": ["VolumeScore", "ConfidenceScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 6 },
+      "backtestLabels": ["target_before_stop_label", "return_5d"]
+    },
+    "volume_climax_score": {
+      "type": "risk",
+      "description": "Detects exhaustion risk when volume spikes excessively into price extension.",
+      "inputs": ["volumeRatio20d", "priceExtensionRate", "upperWickRatio"],
+      "formula": "climax(volumeRatio20d, priceExtensionRate, upperWickRatio)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["normal:0-40", "heated:41-70", "climax:71-100"],
+      "scoreGroup": ["VolumeScore", "RiskScore"],
+      "thresholdRef": "volume-thresholds.volume_climax_score",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 6 },
+      "backtestLabels": ["max_drawdown_3d", "false_breakout_label"]
+    }
+  }
+}

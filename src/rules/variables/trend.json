@@ -1,0 +1,42 @@
+{
+  "domain": "trend",
+  "description": "Controls moving average alignment, slope, and trend risk variables.",
+  "variables": {
+    "ma_alignment_score": {
+      "type": "score",
+      "description": "Scores bullish or bearish ordering across short, medium, and long moving averages.",
+      "inputs": ["ma5", "ma20", "ma60", "ma120"],
+      "formula": "weighted_order_score(ma5, ma20, ma60, ma120)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["bearish:0-35", "mixed:36-65", "bullish:66-100"],
+      "scoreGroup": ["TrendScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["return_5d", "return_20d"]
+    },
+    "trend_slope_score": {
+      "type": "score",
+      "description": "Measures whether the primary moving average slope supports trend continuation.",
+      "inputs": ["ma20Current", "ma20Past"],
+      "formula": "(ma20Current - ma20Past) / ma20Past",
+      "normalization": "slope_to_score",
+      "scoreBands": ["downtrend:0-35", "flat:36-60", "uptrend:61-100"],
+      "scoreGroup": ["TrendScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["return_10d", "target_before_stop_label"]
+    },
+    "trend_breakdown_risk": {
+      "type": "risk",
+      "description": "Estimates risk of trend failure from moving average loss and weak close structure.",
+      "inputs": ["close", "ma20", "ma60", "closePositionScore"],
+      "formula": "risk_if(close < ma20 and closePositionScore < 35) + risk_if(close < ma60)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "warning:31-60", "critical:61-100"],
+      "scoreGroup": ["TrendScore", "RiskScore"],
+      "thresholdRef": "risk-thresholds.trend_breakdown_risk",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["stop_loss_hit_label", "max_drawdown_5d"]
+    }
+  }
+}

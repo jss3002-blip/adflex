@@ -1,0 +1,35 @@
+{
+  "domain": "overlap-penalty",
+  "description": "Controls duplicate signal penalties and contribution caps for future rule aggregation.",
+  "penalties": {
+    "FeatureOverlapPenalty": {
+      "description": "Reduces score when multiple variables reuse nearly identical source signals.",
+      "examples": [
+        { "features": ["volume_ratio_20d", "volume_climax_score"], "penalty": 0.12 },
+        { "features": ["upper_wick_ratio", "false_breakout_risk"], "penalty": 0.1 }
+      ]
+    },
+    "FeatureCorrelationPenalty": {
+      "description": "Applies penalty when historical feature correlation exceeds a threshold.",
+      "correlationThreshold": 0.82,
+      "maxPenalty": 0.18
+    },
+    "SourceContributionCap": {
+      "description": "Caps total score contribution from one source family.",
+      "caps": { "price": 0.28, "volume": 0.22, "news": 0.18, "flow": 0.22 }
+    },
+    "GroupContributionCap": {
+      "description": "Caps group-level contribution to avoid one domain dominating decisions.",
+      "caps": { "BreakoutScore": 0.22, "RiskScore": 0.3, "SentimentScore": 0.16 }
+    },
+    "IndependentSignalCount": {
+      "description": "Requires multiple independent confirmations for high-conviction actions.",
+      "minimumForBuyNow": 4,
+      "minimumForWatchlist": 2
+    },
+    "RiskSignalOverride": {
+      "description": "Allows critical risk variables to override opportunity scores.",
+      "overrideWhen": ["delisting_risk >= 80", "data_quality_risk >= 75", "liquidity_risk_score >= 85"]
+    }
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "domain": "action-rules",
+  "description": "Representative ActionCode decision rules for future StockAI rule-based decisions.",
+  "actionCodes": {
+    "BUY_NOW": {
+      "conditions": ["FinalScore >= 75", "OpportunityScore >= 80", "RiskScore < 45"],
+      "blockers": ["Critical Gate", "High Risk Gate"],
+      "riskConditions": ["false_breakout_risk < 45", "liquidity_risk_score < 45"],
+      "confidenceRequirement": "ConfidenceScore >= 75",
+      "userMessage": "강한 상승 근거와 리스크 조건이 동시에 충족되었습니다.",
+      "backtestLabels": ["buy_now_success_label", "target_before_stop_label"]
+    },
+    "BUY_ON_PULLBACK": {
+      "conditions": ["OpportunityScore >= 70", "RiskScore < 60", "vwap_hold_score >= 65"],
+      "blockers": ["Critical Gate", "High Risk Gate"],
+      "riskConditions": ["fomo_risk < 65", "volume_climax_score < 75"],
+      "confidenceRequirement": "ConfidenceScore >= 65",
+      "userMessage": "추격 매수보다 눌림 확인 후 진입이 유리한 구간입니다.",
+      "backtestLabels": ["buy_on_pullback_success_label", "vwap_hold_label"]
+    },
+    "WAIT_CONFIRMATION": {
+      "conditions": ["OpportunityScore >= 60", "RiskScore >= 45", "RiskScore < 70"],
+      "blockers": ["Critical Gate"],
+      "riskConditions": ["false_breakout_risk >= 55 OR data_quality_risk >= 45"],
+      "confidenceRequirement": "ConfidenceScore >= 55",
+      "userMessage": "신호는 있으나 확인 캔들 또는 거래량 재확인이 필요합니다.",
+      "backtestLabels": ["target_before_stop_label", "false_breakout_label"]
+    },
+    "WATCHLIST": {
+      "conditions": ["FinalScore >= 45", "OpportunityScore >= 50"],
+      "blockers": ["Critical Gate"],
+      "riskConditions": ["RiskScore < 75"],
+      "confidenceRequirement": "ConfidenceScore >= 45",
+      "userMessage": "관찰 가치가 있으나 즉시 행동 조건은 부족합니다.",
+      "backtestLabels": ["return_3d", "return_5d"]
+    },
+    "HOLD": {
+      "conditions": ["positionExists == true", "RiskScore < 60", "trend_breakdown_risk < 60"],
+      "blockers": ["Critical Gate"],
+      "riskConditions": ["liquidity_risk_score < 65"],
+      "confidenceRequirement": "ConfidenceScore >= 50",
+      "userMessage": "기존 포지션은 유지 가능하나 주요 리스크를 모니터링해야 합니다.",
+      "backtestLabels": ["return_5d", "max_drawdown_5d"]
+    },
+    "PARTIAL_PROFIT_TAKING": {
+      "conditions": ["positionExists == true", "volume_climax_score >= 70", "upper_wick_ratio >= 0.35"],
+      "blockers": [],
+      "riskConditions": ["fomo_risk >= 60 OR distribution_layer_score >= 60"],
+      "confidenceRequirement": "ConfidenceScore >= 55",
+      "userMessage": "과열 또는 매물 출회 신호가 있어 일부 수익 실현을 검토할 수 있습니다.",
+      "backtestLabels": ["risk_reduction_success_label", "max_drawdown_3d"]
+    },
+    "RISK_REDUCTION": {
+      "conditions": ["positionExists == true", "RiskScore >= 65"],
+      "blockers": ["Critical Gate"],
+      "riskConditions": ["liquidity_risk_score >= 60 OR false_breakout_risk >= 70"],
+      "confidenceRequirement": "ConfidenceScore >= 50",
+      "userMessage": "리스크가 상승해 포지션 축소 또는 손실 제한 전략이 필요합니다.",
+      "backtestLabels": ["risk_reduction_success_label", "stop_loss_hit_label"]
+    },
+    "EXIT_PRIORITY": {
+      "conditions": ["positionExists == true", "RiskScore >= 80"],
+      "blockers": [],
+      "riskConditions": ["delisting_risk >= 80 OR data_quality_risk >= 75 OR liquidity_vacuum_risk >= 75"],
+      "confidenceRequirement": "ConfidenceScore >= 40",
+      "userMessage": "핵심 리스크가 임계치를 넘어 우선 청산 검토가 필요합니다.",
+      "backtestLabels": ["risk_reduction_success_label", "avoid_success_label"]
+    },
+    "AVOID": {
+      "conditions": ["RiskScore >= 75", "OpportunityScore < 70"],
+      "blockers": [],
+      "riskConditions": ["data_quality_risk >= 60 OR liquidity_risk_score >= 70 OR false_breakout_risk >= 75"],
+      "confidenceRequirement": "ConfidenceScore >= 45",
+      "userMessage": "수익 기회 대비 리스크가 커 신규 접근을 피하는 것이 좋습니다.",
+      "backtestLabels": ["avoid_success_label", "max_drawdown_5d"]
+    },
+    "ANALYSIS_EXCLUDED": {
+      "conditions": ["data_quality_risk >= 85 OR trading_halt_risk >= 90"],
+      "blockers": [],
+      "riskConditions": ["data_quality_collapse == true OR trading_halt_risk >= 90"],
+      "confidenceRequirement": "ConfidenceScore < 40",
+      "userMessage": "데이터 신뢰도 또는 거래 상태 문제로 분석 대상에서 제외됩니다.",
+      "backtestLabels": ["avoid_success_label"]
+    },
+    "HUMAN_REVIEW": {
+      "conditions": ["conflictingSignals == true OR criticalDisclosureDetected == true"],
+      "blockers": [],
+      "riskConditions": ["audit_opinion_risk >= 70 OR macro_event_risk_score >= 75"],
+      "confidenceRequirement": "manual_review_required",
+      "userMessage": "자동 판단보다 전문가 검토가 필요한 예외 상황입니다.",
+      "backtestLabels": ["risk_reduction_success_label", "avoid_success_label"]
+    }
+  }
+}

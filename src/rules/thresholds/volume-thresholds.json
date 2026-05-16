@@ -1,0 +1,24 @@
+{
+  "domain": "volume-thresholds",
+  "description": "Representative low, mid, high, and critical thresholds for volume expansion and turnover.",
+  "thresholds": {
+    "volume_ratio_20d": {
+      "lo": { "max": 0.8 },
+      "mid": { "min": 0.81, "max": 1.5 },
+      "hi": { "min": 1.51, "max": 3 },
+      "critical": { "min": 3.01 }
+    },
+    "volume_climax_score": {
+      "lo": { "max": 35 },
+      "mid": { "min": 36, "max": 65 },
+      "hi": { "min": 66, "max": 84 },
+      "critical": { "min": 85 }
+    },
+    "trading_value_score": {
+      "lo": { "max": 40 },
+      "mid": { "min": 41, "max": 65 },
+      "hi": { "min": 66, "max": 85 },
+      "critical": { "min": 86 }
+    }
+  }
+}

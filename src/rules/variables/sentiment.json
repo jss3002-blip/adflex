@@ -1,0 +1,42 @@
+{
+  "domain": "sentiment",
+  "description": "Controls crowd psychology, FOMO, and narrative fatigue variables.",
+  "variables": {
+    "fomo_risk": {
+      "type": "risk",
+      "description": "Estimates late-entry risk caused by overheated public attention.",
+      "inputs": ["searchTrendSpike", "socialMentionSpike", "priceExtensionRate"],
+      "formula": "fomo_model(searchTrendSpike, socialMentionSpike, priceExtensionRate)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "heated:31-60", "extreme:61-100"],
+      "scoreGroup": ["SentimentScore", "RiskScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["false_breakout_label", "max_drawdown_3d"]
+    },
+    "crowding_score": {
+      "type": "index",
+      "description": "Measures how concentrated public attention and positioning appear.",
+      "inputs": ["retailFlow", "socialMentions", "newsCount"],
+      "formula": "crowding_index(retailFlow, socialMentions, newsCount)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["uncrowded:0-35", "normal:36-65", "crowded:66-100"],
+      "scoreGroup": ["SentimentScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["return_3d", "max_drawdown_3d"]
+    },
+    "narrative_fatigue_score": {
+      "type": "risk",
+      "description": "Detects whether a previously strong narrative is losing incremental impact.",
+      "inputs": ["newsCountTrend", "priceResponseTrend", "volumeResponseTrend"],
+      "formula": "fatigue(newsCountTrend, priceResponseTrend, volumeResponseTrend)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["fresh:0-30", "maturing:31-60", "fatigued:61-100"],
+      "scoreGroup": ["SentimentScore", "RiskScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["false_breakout_label", "avoid_success_label"]
+    }
+  }
+}

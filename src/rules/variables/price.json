@@ -1,0 +1,30 @@
+{
+  "domain": "price",
+  "description": "Controls price position and speed variables for stock analysis scoring.",
+  "variables": {
+    "current_price_position_score": {
+      "type": "score",
+      "description": "Scores where the current price sits within a recent reference range.",
+      "inputs": ["currentPrice", "rangeLow", "rangeHigh"],
+      "formula": "(currentPrice - rangeLow) / (rangeHigh - rangeLow) * 100",
+      "normalization": "clip_0_100",
+      "scoreBands": ["low:0-35", "neutral:36-65", "high:66-100"],
+      "scoreGroup": ["PriceStateScore"],
+      "thresholdRef": "price-thresholds.close_position_score",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 5 },
+      "backtestLabels": ["return_1d", "return_5d"]
+    },
+    "price_speed_score": {
+      "type": "score",
+      "description": "Measures short-term price acceleration compared with recent average movement.",
+      "inputs": ["priceChangeRate", "averageChangeRate"],
+      "formula": "priceChangeRate / averageChangeRate",
+      "normalization": "ratio_to_score",
+      "scoreBands": ["slow:0-40", "normal:41-70", "fast:71-100"],
+      "scoreGroup": ["PriceStateScore", "IntradayScore"],
+      "thresholdRef": "price-thresholds.price_speed_score",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 5 },
+      "backtestLabels": ["max_gain_1d", "max_drawdown_1d"]
+    }
+  }
+}

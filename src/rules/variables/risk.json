@@ -1,0 +1,42 @@
+{
+  "domain": "risk",
+  "description": "Controls core liquidity, data quality, and listing risk variables.",
+  "variables": {
+    "liquidity_risk_score": {
+      "type": "risk",
+      "description": "Scores execution and slippage risk from low trading value and thin orderbook depth.",
+      "inputs": ["tradingValue", "spreadRiskScore", "orderbookDepth"],
+      "formula": "liquidity_risk(tradingValue, spreadRiskScore, orderbookDepth)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "warning:31-60", "critical:61-100"],
+      "scoreGroup": ["RiskScore"],
+      "thresholdRef": "risk-thresholds.liquidity_risk_score",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 15 },
+      "backtestLabels": ["avoid_success_label", "risk_reduction_success_label"]
+    },
+    "data_quality_risk": {
+      "type": "risk",
+      "description": "Scores data reliability risk from missing, stale, or inconsistent sources.",
+      "inputs": ["priceDataCompleteness", "flowFreshness", "backtestConsistency"],
+      "formula": "data_quality_risk(priceDataCompleteness, flowFreshness, backtestConsistency)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["clean:0-30", "degraded:31-60", "unusable:61-100"],
+      "scoreGroup": ["RiskScore", "ConfidenceScore"],
+      "thresholdRef": "risk-thresholds.data_quality_risk",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 25 },
+      "backtestLabels": ["avoid_success_label"]
+    },
+    "delisting_risk": {
+      "type": "risk",
+      "description": "Scores severe listing continuity risk from exchange flags and financial distress.",
+      "inputs": ["exchangeWarningFlag", "financialDistressRisk", "auditOpinionRisk"],
+      "formula": "max(exchangeWarningFlag, financialDistressRisk, auditOpinionRisk)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "high:31-70", "critical:71-100"],
+      "scoreGroup": ["RiskScore"],
+      "thresholdRef": "risk-thresholds.delisting_risk",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 30 },
+      "backtestLabels": ["avoid_success_label"]
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "domain": "macro",
+  "description": "Controls macro risk variables for rates, FX, and scheduled events.",
+  "variables": {
+    "interest_rate_risk_score": {
+      "type": "risk",
+      "description": "Scores equity risk from rate changes and sensitivity of the stock or sector.",
+      "inputs": ["rateChange", "durationSensitivity", "sectorSensitivity"],
+      "formula": "rate_risk(rateChange, durationSensitivity, sectorSensitivity)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "warning:31-60", "critical:61-100"],
+      "scoreGroup": ["MacroScore", "RiskScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["max_drawdown_5d", "risk_reduction_success_label"]
+    },
+    "fx_risk_score": {
+      "type": "risk",
+      "description": "Scores FX pressure for export/import-sensitive stocks.",
+      "inputs": ["fxChangeRate", "companyFxExposure", "sectorFxSensitivity"],
+      "formula": "fx_risk(fxChangeRate, companyFxExposure, sectorFxSensitivity)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "warning:31-60", "critical:61-100"],
+      "scoreGroup": ["MacroScore", "RiskScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["max_drawdown_3d", "avoid_success_label"]
+    },
+    "macro_event_risk_score": {
+      "type": "risk",
+      "description": "Scores scheduled macro event risk from timing and expected volatility.",
+      "inputs": ["eventImportance", "eventTimeDistance", "impliedVolatility"],
+      "formula": "event_importance_decay(eventImportance, eventTimeDistance) * impliedVolatility",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "elevated:31-60", "critical:61-100"],
+      "scoreGroup": ["MacroScore", "RiskScore"],
+      "thresholdRef": "risk-thresholds.macro_event_risk_score",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["risk_reduction_success_label", "max_drawdown_5d"]
+    }
+  }
+}

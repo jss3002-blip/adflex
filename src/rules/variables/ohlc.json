@@ -1,0 +1,42 @@
+{
+  "domain": "ohlc",
+  "description": "Controls candle structure variables derived from open, high, low, and close data.",
+  "variables": {
+    "close_position_score": {
+      "type": "score",
+      "description": "Scores the close location inside the candle range.",
+      "inputs": ["open", "high", "low", "close"],
+      "formula": "(close - low) / (high - low) * 100",
+      "normalization": "clip_0_100",
+      "scoreBands": ["weak_close:0-35", "mid_close:36-65", "strong_close:66-100"],
+      "scoreGroup": ["PriceStateScore"],
+      "thresholdRef": "price-thresholds.close_position_score",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 5 },
+      "backtestLabels": ["return_1d", "target_hit_label"]
+    },
+    "upper_wick_ratio": {
+      "type": "ratio",
+      "description": "Measures selling pressure shown by the upper wick.",
+      "inputs": ["open", "high", "close"],
+      "formula": "(high - max(open, close)) / high",
+      "normalization": "percentage",
+      "scoreBands": ["low_supply:0-0.15", "moderate_supply:0.16-0.35", "heavy_supply:0.36+"],
+      "scoreGroup": ["PriceStateScore", "RiskScore"],
+      "thresholdRef": "price-thresholds.upper_wick_ratio",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 5 },
+      "backtestLabels": ["false_breakout_label", "max_drawdown_1d"]
+    },
+    "lower_wick_ratio": {
+      "type": "ratio",
+      "description": "Measures intraday demand absorption shown by the lower wick.",
+      "inputs": ["open", "low", "close"],
+      "formula": "(min(open, close) - low) / close",
+      "normalization": "percentage",
+      "scoreBands": ["low_absorption:0-0.15", "normal:0.16-0.35", "strong_absorption:0.36+"],
+      "scoreGroup": ["PriceStateScore", "SmartMoneyScore"],
+      "thresholdRef": "price-thresholds.lower_wick_ratio",
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 5 },
+      "backtestLabels": ["vwap_hold_label", "return_3d"]
+    }
+  }
+}

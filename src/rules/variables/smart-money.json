@@ -1,0 +1,42 @@
+{
+  "domain": "smart-money",
+  "description": "Controls distribution, absorption, and liquidity-grab variables.",
+  "variables": {
+    "distribution_layer_score": {
+      "type": "risk",
+      "description": "Scores layered selling risk near resistance or after extended runs.",
+      "inputs": ["upperWickRatio", "institutionFlowScore", "resistanceProximity"],
+      "formula": "distribution_model(upperWickRatio, inverse(institutionFlowScore), resistanceProximity)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "visible:31-60", "heavy:61-100"],
+      "scoreGroup": ["RiskScore", "FlowScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["distribution_layer_label", "max_drawdown_5d"]
+    },
+    "smart_money_absorption_score": {
+      "type": "score",
+      "description": "Scores evidence of strong hands absorbing supply during pullbacks.",
+      "inputs": ["lowerWickRatio", "volumePersistenceScore", "orderbookImbalanceScore"],
+      "formula": "absorption(lowerWickRatio, volumePersistenceScore, orderbookImbalanceScore)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["weak:0-35", "mixed:36-65", "strong:66-100"],
+      "scoreGroup": ["FlowScore", "ConfidenceScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["vwap_hold_label", "buy_on_pullback_success_label"]
+    },
+    "liquidity_grab_score": {
+      "type": "score",
+      "description": "Detects stop-hunt style liquidity grabs followed by reclaim.",
+      "inputs": ["lowSweep", "vwapReclaimScore", "lowerWickRatio"],
+      "formula": "liquidity_grab(lowSweep, vwapReclaimScore, lowerWickRatio)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["absent:0-35", "possible:36-65", "confirmed:66-100"],
+      "scoreGroup": ["IntradayScore", "ConfidenceScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["target_hit_label", "return_3d"]
+    }
+  }
+}

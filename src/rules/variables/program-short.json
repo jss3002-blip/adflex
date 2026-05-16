@@ -1,0 +1,42 @@
+{
+  "domain": "program-short",
+  "description": "Controls program trading and short-selling related variables.",
+  "variables": {
+    "program_flow_score": {
+      "type": "score",
+      "description": "Scores program trading support or pressure relative to trading value.",
+      "inputs": ["programNetBuy", "tradingValue"],
+      "formula": "programNetBuy / tradingValue",
+      "normalization": "flow_ratio_to_score",
+      "scoreBands": ["sell_pressure:0-35", "neutral:36-65", "buy_support:66-100"],
+      "scoreGroup": ["ProgramScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["return_3d", "return_5d"]
+    },
+    "program_sell_turnover_risk": {
+      "type": "risk",
+      "description": "Measures risk from heavy program sell turnover during weak price action.",
+      "inputs": ["programSellValue", "tradingValue", "closePositionScore"],
+      "formula": "(programSellValue / tradingValue) * inverse(closePositionScore)",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "warning:31-60", "critical:61-100"],
+      "scoreGroup": ["ProgramScore", "RiskScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 8 },
+      "backtestLabels": ["risk_reduction_success_label", "max_drawdown_3d"]
+    },
+    "short_interest_change_score": {
+      "type": "score",
+      "description": "Scores whether short interest change creates squeeze potential or downside pressure.",
+      "inputs": ["shortInterestCurrent", "shortInterestPrevious", "daysToCover"],
+      "formula": "short_change_model(shortInterestCurrent, shortInterestPrevious, daysToCover)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["pressure:0-35", "neutral:36-65", "squeeze_potential:66-100"],
+      "scoreGroup": ["ShortSellingScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["max_gain_3d", "return_5d"]
+    }
+  }
+}

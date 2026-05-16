@@ -1,0 +1,42 @@
+{
+  "domain": "sector",
+  "description": "Controls sector strength, breadth, and rotation variables.",
+  "variables": {
+    "sector_relative_strength_score": {
+      "type": "score",
+      "description": "Scores stock sector performance relative to the broad market.",
+      "inputs": ["sectorReturn", "marketReturn", "lookbackDays"],
+      "formula": "relative_strength(sectorReturn, marketReturn, lookbackDays)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["lagging:0-35", "neutral:36-65", "leading:66-100"],
+      "scoreGroup": ["SectorScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 6 },
+      "backtestLabels": ["return_5d", "return_20d"]
+    },
+    "sector_breadth_score": {
+      "type": "score",
+      "description": "Scores how many stocks inside the sector participate in the move.",
+      "inputs": ["advancingStocks", "decliningStocks", "sectorUniverseSize"],
+      "formula": "advancingStocks / sectorUniverseSize",
+      "normalization": "percentage_to_score",
+      "scoreBands": ["narrow:0-35", "mixed:36-65", "broad:66-100"],
+      "scoreGroup": ["SectorScore", "ConfidenceScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 6 },
+      "backtestLabels": ["target_before_stop_label", "return_10d"]
+    },
+    "sector_rotation_score": {
+      "type": "score",
+      "description": "Scores whether capital is rotating into the sector from weaker themes.",
+      "inputs": ["sectorFlow", "relativeStrengthChange", "marketRegime"],
+      "formula": "rotation_model(sectorFlow, relativeStrengthChange, marketRegime)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["outflow:0-35", "neutral:36-65", "inflow:66-100"],
+      "scoreGroup": ["SectorScore", "FlowScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 6 },
+      "backtestLabels": ["return_10d", "return_20d"]
+    }
+  }
+}

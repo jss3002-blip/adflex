@@ -1,0 +1,42 @@
+{
+  "domain": "news-disclosure",
+  "description": "Controls news impact, disclosure reliability, and sell-the-news risk variables.",
+  "variables": {
+    "news_impact_score": {
+      "type": "score",
+      "description": "Scores likely price impact from recent news intensity, freshness, and relevance.",
+      "inputs": ["newsSentiment", "newsFreshness", "newsRelevance"],
+      "formula": "newsSentiment * newsFreshness * newsRelevance",
+      "normalization": "clip_0_100",
+      "scoreBands": ["negative:0-35", "neutral:36-65", "positive:66-100"],
+      "scoreGroup": ["NewsDisclosureScore", "SentimentScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["return_1d", "return_3d"]
+    },
+    "disclosure_reliability_score": {
+      "type": "score",
+      "description": "Scores quality and credibility of disclosures based on source and historical follow-through.",
+      "inputs": ["disclosureType", "sourceReliability", "historicalFollowThrough"],
+      "formula": "reliability(disclosureType, sourceReliability, historicalFollowThrough)",
+      "normalization": "clip_0_100",
+      "scoreBands": ["weak:0-40", "normal:41-70", "strong:71-100"],
+      "scoreGroup": ["NewsDisclosureScore", "ConfidenceScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["target_hit_label", "return_5d"]
+    },
+    "sell_the_news_risk": {
+      "type": "risk",
+      "description": "Measures risk that good news is already priced in and followed by selling.",
+      "inputs": ["priceRunupBeforeNews", "volumeClimaxScore", "newsImpactScore"],
+      "formula": "risk_if(priceRunupBeforeNews high and newsImpactScore high) + volumeClimaxScore * 0.3",
+      "normalization": "risk_clip_0_100",
+      "scoreBands": ["low:0-30", "warning:31-60", "critical:61-100"],
+      "scoreGroup": ["NewsDisclosureScore", "RiskScore"],
+      "thresholdRef": null,
+      "missingPolicy": { "fallback": null, "defaultScore": 50, "confidencePenalty": 10 },
+      "backtestLabels": ["false_breakout_label", "max_drawdown_3d"]
+    }
+  }
+}
