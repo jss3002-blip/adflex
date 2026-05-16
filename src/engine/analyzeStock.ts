@@ -10,6 +10,8 @@ import {
   type StockStateClassificationResult,
 } from "./classifyState";
 import { getActionCode, type ActionCodeInput, type ActionCodeResult } from "./actionCode";
+import { analyzeSignalConflicts, type SignalConflictResult } from "./scoreConflict";
+import { analyzeFalseSignalRisk, type FalseSignalResult } from "./scoreFalseSignal";
 
 export type StockAnalysisInput = EngineStockAnalysisInput;
 
@@ -29,6 +31,8 @@ export type StockAnalysisResult = {
   risk: ReturnType<typeof scoreRisk>;
   state: ReturnType<typeof classifyState>;
   action: ReturnType<typeof getActionCode>;
+  conflictAnalysis?: SignalConflictResult;
+  falseSignalAnalysis?: FalseSignalResult;
   finalScore: number;
   finalGrade: StockAnalysisGrade;
   summary: string;
@@ -295,6 +299,40 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     state.primaryState,
     action.actionCode,
   );
+  const conflictAnalysis = analyzeSignalConflicts({
+    totalScore: finalScore,
+    closePositionScore: ohlc.closePositionScore,
+    fiftyTwoWeekPositionScore: ohlc.week52PositionScore,
+    volumeScore: volume.volumeScore,
+    volumeRiskScore: volume.volumeRiskScore,
+    vwapScore: vwap.vwapScore,
+    vwapRiskScore: vwap.vwapRiskScore,
+    totalRiskScore: risk.riskScore,
+    volatilityRisk: risk.volatilityRiskScore,
+    distributionRisk: risk.distributionRiskScore,
+    vwapBreakdownRisk: risk.vwapBreakdownRiskScore,
+    participationWeaknessRisk: risk.lowLiquidityOrWeakParticipationRiskScore,
+    trendCollapseRisk: risk.trendCollapseRiskScore,
+    dailyChangePercent: ohlc.previousCloseChangePercent,
+    intradayRangePercent: ohlc.intradayRangePercent,
+    vwapDistancePercent: vwap.vwapDistancePercent,
+  });
+  const falseSignalAnalysis = analyzeFalseSignalRisk({
+    closePositionScore: ohlc.closePositionScore,
+    volumeScore: volume.volumeScore,
+    volumeRiskScore: volume.volumeRiskScore,
+    vwapScore: vwap.vwapScore,
+    vwapRiskScore: vwap.vwapRiskScore,
+    volatilityRisk: risk.volatilityRiskScore,
+    distributionRisk: risk.distributionRiskScore,
+    vwapBreakdownRisk: risk.vwapBreakdownRiskScore,
+    trendCollapseRisk: risk.trendCollapseRiskScore,
+    dailyChangePercent: ohlc.previousCloseChangePercent,
+    intradayRangePercent: ohlc.intradayRangePercent,
+    upperWickRatio: ohlc.upperWickRatio,
+    lowerWickRatio: ohlc.lowerWickRatio,
+    vwapDistancePercent: vwap.vwapDistancePercent,
+  });
 
   return {
     normalized,
@@ -304,6 +342,8 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     risk,
     state,
     action,
+    conflictAnalysis,
+    falseSignalAnalysis,
     finalScore,
     finalGrade,
     summary: generateFinalSummary(finalGrade, finalScore, risk.riskScore, state, action),
