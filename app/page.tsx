@@ -1130,9 +1130,9 @@ function QualitySignalsSection({ result }: { result: StockAnalysisViewResult }) 
       <div className="mb-4">
         <p className="text-sm font-semibold text-orange-100">분석 품질 보강 신호</p>
         <p className="mt-1 text-xs leading-5 text-white/50">
-          이 점수는 종목 전체 위험도가 아니라, 개별 점수만으로는 놓치기 쉬운 신호 충돌과 가짜 강세 가능성을
-          따로 평가한 보조 분석 점수입니다. 리스크 게이트 해석은 원점수가 괜찮아 보여도 핵심 구조 위험 때문에
-          더 신중한 해석이 필요한지 점검하는 진단 계층입니다.
+          이 영역의 점수들은 모두 같은 의미의 위험 점수가 아닙니다. 신호 충돌은 지표 간 불일치, 가짜 신호
+          위험은 회복 신뢰도, 리스크 게이트는 원점수 해석 제한, 대응 우선순위는 확인 순서를 나타냅니다.
+          따라서 서로 직접 비교하기보다 각각의 역할에 따라 해석해야 합니다.
         </p>
       </div>
       <div className="grid gap-3 lg:grid-cols-3">
@@ -1351,7 +1351,7 @@ function ConfirmationItemsCard({ cards, compact = false }: { cards: IndicatorIns
         <ol className={`mt-4 grid gap-3 text-xs leading-6 text-white/72 ${compact ? "max-h-96 overflow-y-auto pr-1" : ""}`}>
           {cards.map((insight, index) => (
             <InsightCard
-              key={`${insight.badge}-${insight.title}`}
+              key={`${insight.badge}-${insight.title}-${index}`}
               insight={insight}
               index={index}
             />
@@ -1625,24 +1625,24 @@ function getRiskScoreColor(score: number) {
 }
 
 function getActionPriorityLabel(score: number): string {
-  if (score >= 80) return "매우 높음";
-  if (score >= 60) return "높음";
-  if (score >= 40) return "보통";
-  if (score >= 20) return "관리 가능";
+  if (score >= 85) return "매우 높은 확인 우선순위";
+  if (score >= 70) return "확인 우선";
+  if (score >= 55) return "확인 필요";
+  if (score >= 30) return "보통";
   return "낮음";
 }
 
 function getActionPriorityColor(score: number) {
-  if (score >= 80) return { bar: "bg-red-800", badge: "bg-red-500/20 text-red-100" };
-  if (score >= 60) return { bar: "bg-red-500", badge: "bg-red-400/15 text-red-100" };
-  if (score >= 40) return { bar: "bg-yellow-300", badge: "bg-yellow-300/15 text-yellow-100" };
-  if (score >= 20) return { bar: "bg-orange-400", badge: "bg-orange-300/15 text-orange-100" };
+  if (score >= 85) return { bar: "bg-red-700", badge: "bg-red-500/20 text-red-100" };
+  if (score >= 70) return { bar: "bg-orange-500", badge: "bg-orange-300/15 text-orange-100" };
+  if (score >= 55) return { bar: "bg-amber-300", badge: "bg-amber-300/15 text-amber-100" };
+  if (score >= 30) return { bar: "bg-yellow-300", badge: "bg-yellow-300/15 text-yellow-100" };
   return { bar: "bg-emerald-400", badge: "bg-emerald-300/15 text-emerald-100" };
 }
 
 function getQualitySignalLevelLabel(level: QualitySignalLevel | undefined): string {
   if (level === "CRITICAL") return "구조 점검 필요";
-  if (level === "HIGH") return "단기 확인 우선순위 높음";
+  if (level === "HIGH") return "단기 확인 우선";
   if (level === "MEDIUM") return "회복 신뢰도 확인 필요";
   if (level === "LOW") return "보조 위험 신호 낮음";
   return "보조 분석 확인";
@@ -1678,12 +1678,16 @@ function getRiskGateOverlayColor(score: number, severity: RiskGateSeverity | und
 }
 
 function getActionPriorityDescription(score: number): string {
-  if (score >= 80) {
-    return "대응 우선순위 점수는 현재 종목을 얼마나 우선적으로 점검해야 하는지를 나타내는 점수입니다. 점수가 높을수록 매수 신호가 강하다는 뜻이 아니라, VWAP 이탈, 추세 훼손, 변동성 확대, 약한 종가 위치 같은 조건을 더 신중하게 확인해야 한다는 의미입니다.";
+  if (score >= 85) {
+    return "대응 우선순위 점수는 전체 위험도나 매력도가 아니라 확인 순서를 정하는 점수입니다. 이 구간은 데이터 품질 제한이나 여러 독립 위험이 겹칠 때 우선 점검 강도가 매우 높다는 뜻입니다.";
   }
 
-  if (score >= 60) {
-    return "현재 종목에는 우선 확인할 조건이 일부 존재합니다. VWAP 위치, 종가 회복 여부, 변동성 확대 여부를 먼저 점검해야 합니다.";
+  if (score >= 70) {
+    return "현재 종목은 확인 우선 구간입니다. VWAP 위치, 종가 회복 여부, 변동성 확대 여부를 먼저 보되, 이 점수를 전체 위험도와 같은 의미로 해석하지 않아야 합니다.";
+  }
+
+  if (score >= 55) {
+    return "현재 종목에는 확인할 조건이 일부 있습니다. 가격 위치와 리스크 신호가 같은 방향으로 개선되는지 차분히 점검해야 합니다.";
   }
 
   return "현재 대응 우선순위는 과도하게 높은 구간은 아닙니다. 다만 가격 위치와 리스크 신호가 바뀌는지 계속 확인해야 합니다.";
