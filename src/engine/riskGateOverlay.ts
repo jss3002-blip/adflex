@@ -5,6 +5,7 @@ export type RiskGateType =
   | "WEAK_CLOSE_GATE"
   | "TREND_COLLAPSE_GATE"
   | "VOLATILITY_WEAK_CLOSE_GATE"
+  | "VOLATILITY_WATCH_GATE"
   | "VOLUME_WITHOUT_RECOVERY_GATE"
   | "AUXILIARY_RISK_GATE"
   | "DATA_QUALITY_GATE"
@@ -158,6 +159,29 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
         "현재 점수 보정은 적용하지 않지만, 향후에는 높은 변동성과 약한 종가의 결합을 신호 안정성 감점으로 사용할 수 있습니다.",
       backtestLabelHint: "weak_close_after_volatility_label",
       weight: 10,
+    });
+  }
+
+  if (
+    hasNumber(input.volatilityRisk) &&
+    input.volatilityRisk >= 70 &&
+    hasNumber(input.intradayRangePercent) &&
+    input.intradayRangePercent >= 8 &&
+    safeNumber(input.closePositionScore, 50) > 30
+  ) {
+    gates.push({
+      type: "VOLATILITY_WATCH_GATE",
+      severity: "WATCH",
+      titleKo: "장중 변동성 확대 관찰 게이트",
+      summaryKo:
+        "변동성 관찰 게이트는 약한 종가나 VWAP 이탈이 확정된 상태를 뜻하지 않습니다. 다만 장중 고저 폭이 커진 날에는 가격 신호가 흔들릴 수 있으므로, 다음 흐름에서 변동폭이 줄고 종가 안정성이 유지되는지 확인해야 합니다.",
+      evidenceKo: `변동성 위험 ${formatScore(input.volatilityRisk)}, 장중 변동폭 ${formatPercent(input.intradayRangePercent)}, 종가 위치 점수 ${formatScore(input.closePositionScore)}, VWAP 점수 ${formatScore(input.vwapScore)} 기준으로 과도하지 않은 관찰 게이트를 적용했습니다.`,
+      actionKo:
+        "고객은 이 신호를 위험 확정이 아니라 변동성 재확인 조건으로 봐야 합니다. VWAP와 종가 위치가 유지되는지, 다음 거래일 변동폭이 완화되는지 확인하는 것이 핵심입니다.",
+      scoreImpactNoteKo:
+        "현재 finalScore와 riskScore는 변경하지 않습니다. 이 게이트는 보조 해석에서 변동성 확인 필요성을 낮은 강도로 표시합니다.",
+      backtestLabelHint: "volatility_watch_label",
+      weight: 20,
     });
   }
 

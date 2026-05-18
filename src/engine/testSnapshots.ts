@@ -1,5 +1,8 @@
 import { sampleStockInput } from "../data/sampleStockInput";
+import { dedupeConfirmationCards, type ConfirmationCardLike } from "../ui/dedupeConfirmationCards";
 import { analyzeStock, type StockAnalysisResult } from "./analyzeStock";
+import { analyzeFalseSignalRisk } from "./scoreFalseSignal";
+import { analyzeSignalConflicts } from "./scoreConflict";
 import { analyzeRiskGateOverlay, type RiskGateInput } from "./riskGateOverlay";
 import { getScoreFormulaPolicy } from "./scoreFormulaPolicy";
 
@@ -59,6 +62,40 @@ const highRiskOverlayFixture: RiskGateInput = {
 const highRiskOverlay = analyzeRiskGateOverlay(highRiskOverlayFixture);
 assertHighRiskOverlaySnapshot(highRiskOverlay);
 
+const moderateCautionFixture = {
+  finalScore: 61,
+  totalScore: 61,
+  totalRiskScore: 33,
+  closePositionScore: 75,
+  fiftyTwoWeekPositionScore: 68,
+  vwapScore: 70,
+  vwapRiskScore: 42,
+  vwapBreakdownRisk: 42,
+  trendCollapseRisk: 25,
+  volatilityRisk: 70,
+  volumeScore: 55,
+  volumeRiskScore: 25,
+  distributionRisk: 20,
+  participationWeaknessRisk: 18,
+  confidenceScore: 62,
+  dailyChangePercent: -1.8,
+  intradayRangePercent: 9.8,
+  vwapDistancePercent: 0.4,
+  upperWickRatio: 12,
+};
+const moderateConflict = analyzeSignalConflicts(moderateCautionFixture);
+const moderateFalseSignal = analyzeFalseSignalRisk(moderateCautionFixture);
+const moderateOverlay = analyzeRiskGateOverlay({
+  ...moderateCautionFixture,
+  conflictScore: moderateConflict.conflictScore,
+  falseSignalScore: moderateFalseSignal.falseSignalScore,
+});
+assertModerateCautionAuxiliarySnapshot(moderateConflict, moderateFalseSignal, moderateOverlay);
+
+const duplicateConfirmationCards = buildDuplicateConfirmationFixture();
+const dedupedConfirmationCards = dedupeConfirmationCards(duplicateConfirmationCards, getConfirmationFixturePreferenceScore);
+assertConfirmationCardsDeduped(duplicateConfirmationCards, dedupedConfirmationCards);
+
 console.log("StockAI engine snapshot baseline");
 console.log({
   normalizedName: result.normalized.name,
@@ -88,6 +125,20 @@ console.log({
   highRiskGateCount: highRiskOverlay.gates.length,
   highRiskGateTypes: highRiskOverlay.gates.map((gate) => gate.type),
   highRiskBacktestLabels: highRiskOverlay.backtestLabelHints,
+});
+console.log("StockAI moderate caution auxiliary baseline");
+console.log({
+  moderateConflictScore: moderateConflict.conflictScore,
+  moderateFalseSignalScore: moderateFalseSignal.falseSignalScore,
+  moderateOverlayScore: moderateOverlay.overlayScore,
+  moderateOverlaySeverity: moderateOverlay.severity,
+  moderateGateTypes: moderateOverlay.gates.map((gate) => gate.type),
+});
+console.log("StockAI confirmation dedupe baseline");
+console.log({
+  beforeConfirmationCount: duplicateConfirmationCards.length,
+  afterConfirmationCount: dedupedConfirmationCards.length,
+  titles: dedupedConfirmationCards.map((card) => card.title),
 });
 console.log("StockAI engine snapshot verification passed.");
 
@@ -159,6 +210,8 @@ function assertHighRiskOverlaySnapshot(overlayResult: ReturnType<typeof analyzeR
   assertNumberRange("highRiskOverlay.overlayScore", overlayResult.overlayScore);
   assertGreaterThan("highRiskOverlay.overlayScore", overlayResult.overlayScore, 0);
   assertNotEqual("highRiskOverlay.severity", overlayResult.severity, "NONE");
+  assertNotEqual("highRiskOverlay.severity", overlayResult.severity, "BLOCK");
+  assertLessThan("highRiskOverlay.overlayScore", overlayResult.overlayScore, 100);
   assertGreaterThan("highRiskOverlay.gates.length", overlayResult.gates.length, 0);
   assertGreaterThan("highRiskOverlay.backtestLabelHints.length", overlayResult.backtestLabelHints.length, 0);
 
@@ -176,6 +229,81 @@ function assertHighRiskOverlaySnapshot(overlayResult: ReturnType<typeof analyzeR
     "RISK_SCORE_DIVERGENCE_GATE",
     "STATE_COLLAPSE_CLUSTER_GATE",
   ]);
+}
+
+function assertModerateCautionAuxiliarySnapshot(
+  conflictResult: ReturnType<typeof analyzeSignalConflicts>,
+  falseSignalResult: ReturnType<typeof analyzeFalseSignalRisk>,
+  overlayResult: ReturnType<typeof analyzeRiskGateOverlay>,
+): void {
+  const combinedAuxiliaryScore =
+    conflictResult.conflictScore + falseSignalResult.falseSignalScore + overlayResult.overlayScore;
+
+  assertGreaterThan("moderateCaution.combinedAuxiliaryScore", combinedAuxiliaryScore, 0);
+  assertEqual("moderateCaution.conflictScore", conflictResult.conflictScore, 0);
+  assertEqual("moderateCaution.falseSignalScore", falseSignalResult.falseSignalScore, 0);
+  assertGreaterThan("moderateCaution.overlayScore", overlayResult.overlayScore, 0);
+  assertLessThan("moderateCaution.overlayScore", overlayResult.overlayScore, 55);
+  assertNotEqual("moderateCaution.overlaySeverity", overlayResult.severity, "HIGH_RISK");
+  assertNotEqual("moderateCaution.overlaySeverity", overlayResult.severity, "BLOCK");
+}
+
+function buildDuplicateConfirmationFixture(): ConfirmationCardLike[] {
+  return [
+    {
+      title: "장중 변동성 확대 후 종가 위치 확인",
+      badge: "확인 필요",
+      priority: "중요 확인",
+      meaning: "장중 흔들림 이후 마감 위치를 확인해야 합니다.",
+      evidence: "변동성 위험 70점 기준입니다.",
+      nextCheck: "다음 거래일 변동폭 완화 여부를 확인해야 합니다.",
+    },
+    {
+      title: "장중 변동성 확대 후 종가 위치 확인",
+      badge: "확인 필요",
+      priority: "중요 확인",
+      meaning: "장중 흔들림 이후 마감 위치와 VWAP 유지 여부를 함께 확인해야 합니다.",
+      evidence: "변동성 위험 70점, 장중 변동폭 9.8%, 종가 위치 점수 75점 기준입니다.",
+      nextCheck: "다음 거래일 변동폭이 줄고 VWAP와 종가 위치가 유지되는지 확인해야 합니다.",
+    },
+    {
+      title: "VWAP 회복 여부 확인",
+      badge: "확인 필요",
+      priority: "보조 확인",
+      meaning: "VWAP 기준 가격 안정성을 확인합니다.",
+      evidence: "VWAP 점수 70점 기준입니다.",
+      nextCheck: "VWAP 위 유지 여부를 확인해야 합니다.",
+    },
+    {
+      title: "종가 저가권 마감 확인",
+      badge: "확인 필요",
+      priority: "보조 확인",
+      meaning: "종가 위치가 약한지 확인합니다.",
+      evidence: "종가 위치 점수 기준입니다.",
+      nextCheck: "다음 종가 개선 여부를 확인해야 합니다.",
+    },
+  ];
+}
+
+function assertConfirmationCardsDeduped(
+  originalCards: ConfirmationCardLike[],
+  dedupedCards: ConfirmationCardLike[],
+): void {
+  assertEqual("confirmationCards.beforeCount", originalCards.length, 4);
+  assertEqual("confirmationCards.afterCount", dedupedCards.length, 3);
+  assertUniqueStrings("confirmationCards.titles", dedupedCards.map((card) => `${card.badge}-${card.title}`));
+
+  const volatilityCard = dedupedCards.find((card) => card.title === "장중 변동성 확대 후 종가 위치 확인");
+  if (!volatilityCard || !volatilityCard.evidence.includes("장중 변동폭 9.8%")) {
+    throw new Error("confirmationCards should keep the richer duplicate card for the volatility title.");
+  }
+}
+
+function getConfirmationFixturePreferenceScore(card: ConfirmationCardLike): number {
+  if (card.priority === "최우선 확인") return 3;
+  if (card.priority === "중요 확인") return 2;
+  if (card.priority === "보조 확인") return 1;
+  return 0;
 }
 
 function assertRequiredPoliciesExist(): void {
@@ -221,6 +349,12 @@ function assertGreaterThan(label: string, actual: number, minimumExclusive: numb
   }
 }
 
+function assertLessThan(label: string, actual: number, maximumExclusive: number): void {
+  if (!Number.isFinite(actual) || actual >= maximumExclusive) {
+    throw new Error(`${label} must be less than ${maximumExclusive}. Received: ${actual}.`);
+  }
+}
+
 function assertNotEqual<T>(label: string, actual: T, unexpected: T): void {
   if (actual === unexpected) {
     throw new Error(`${label} must not be ${String(unexpected)}.`);
@@ -230,6 +364,12 @@ function assertNotEqual<T>(label: string, actual: T, unexpected: T): void {
 function assertIncludesSome<T>(label: string, actual: T[], expectedAny: T[]): void {
   if (!expectedAny.some((expected) => actual.includes(expected))) {
     throw new Error(`${label} must include at least one expected value. Received: ${actual.join(", ")}.`);
+  }
+}
+
+function assertUniqueStrings(label: string, values: string[]): void {
+  if (new Set(values).size !== values.length) {
+    throw new Error(`${label} must not contain duplicate values. Received: ${values.join(", ")}.`);
   }
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { dedupeConfirmationCards } from "@/src/ui/dedupeConfirmationCards";
 
 type IconName =
   | "activity"
@@ -1836,19 +1837,23 @@ function getTopConfirmationCards(
     }
   }
 
-  const uniqueCards = Array.from(bestByGroup.values()).sort(
+  const uniqueCards = dedupeConfirmationCards(Array.from(bestByGroup.values()), (card) =>
+    getConfirmationSortScore(card, result),
+  ).sort(
     (a, b) => getConfirmationSortScore(b, result) - getConfirmationSortScore(a, result),
   );
   if (uniqueCards.length >= limit) return uniqueCards.slice(0, limit);
 
   const selected = [...uniqueCards];
   for (const card of cards) {
-    if (selected.includes(card)) continue;
-    selected.push(card);
+    const nextSelected = dedupeConfirmationCards([...selected, card], (item) =>
+      getConfirmationSortScore(item, result),
+    );
+    selected.splice(0, selected.length, ...nextSelected);
     if (selected.length >= limit) return selected;
   }
 
-  return selected;
+  return dedupeConfirmationCards(selected, (card) => getConfirmationSortScore(card, result));
 }
 
 function buildScoreBasedConfirmationCandidates(result: StockAnalysisViewResult): IndicatorInsight[] {
