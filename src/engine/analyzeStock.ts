@@ -361,6 +361,21 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     dataMode: normalized.analysisMode,
     isRealtime: normalized.metadata?.isRealtime,
   });
+  const customerFacingAction = {
+    ...action,
+    actionScore: calibrateCustomerFacingActionPriorityScore(action.actionScore, {
+      actionCode: action.actionCode,
+      totalRiskScore: risk.riskScore,
+      confidenceScore: state.confidenceScore,
+      closePositionScore: ohlc.closePositionScore,
+      vwapScore: vwap.vwapScore,
+      vwapBreakdownRisk: risk.vwapBreakdownRiskScore,
+      trendCollapseRisk: risk.trendCollapseRiskScore,
+      volatilityRisk: risk.volatilityRiskScore,
+      overlayScore: riskGateOverlay.overlayScore,
+      overlaySeverity: riskGateOverlay.severity,
+    }),
+  };
 
   return {
     normalized,
@@ -369,7 +384,7 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     vwap,
     risk,
     state,
-    action,
+    action: customerFacingAction,
     conflictAnalysis,
     falseSignalAnalysis,
     riskGateOverlay,
@@ -379,6 +394,62 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     warnings: mergeFinalWarnings(risk, state, action),
     evidence: mergeFinalEvidence(ohlc, volume, vwap, risk, state, action),
   };
+}
+
+type CustomerFacingActionPriorityContext = {
+  actionCode: string;
+  totalRiskScore: number;
+  confidenceScore: number;
+  closePositionScore: number;
+  vwapScore: number;
+  vwapBreakdownRisk: number;
+  trendCollapseRisk: number;
+  volatilityRisk: number;
+  overlayScore: number;
+  overlaySeverity: string;
+};
+
+function calibrateCustomerFacingActionPriorityScore(
+  rawScore: number,
+  context: CustomerFacingActionPriorityContext,
+): number {
+  let score = rawScore;
+
+  if (isNormalCautionPriorityCluster(context)) {
+    score = Math.min(score, 78);
+  }
+
+  if (context.overlayScore >= 75 && context.totalRiskScore < 60 && context.overlaySeverity !== "BLOCK") {
+    score = Math.min(score, 78);
+  }
+
+  if (context.overlayScore >= 55 && context.totalRiskScore < 55 && context.confidenceScore < 70) {
+    score = Math.min(score, 76);
+  }
+
+  return clampScore(score);
+}
+
+function isNormalCautionPriorityCluster(context: CustomerFacingActionPriorityContext): boolean {
+  const isMonitorAction = [
+    "VWAP_SUPPORT_MONITOR",
+    "WAIT_CONFIRMATION",
+    "WATCH_ONLY",
+    "PULLBACK_MONITOR",
+    "NO_CLEAR_EDGE",
+  ].includes(context.actionCode);
+
+  if (!isMonitorAction) return false;
+  if (context.totalRiskScore >= 65 || context.overlaySeverity === "BLOCK") return false;
+
+  const overlappingRiskCount = [
+    context.vwapScore <= 40 || context.vwapBreakdownRisk >= 70,
+    context.closePositionScore <= 30,
+    context.trendCollapseRisk >= 70,
+    context.volatilityRisk >= 70,
+  ].filter(Boolean).length;
+
+  return overlappingRiskCount >= 2;
 }
 
 function positiveOr(value: unknown, fallback: number): number {

@@ -56,7 +56,7 @@ export function analyzeSignalConflicts(input: SignalConflictInput): SignalConfli
       summaryKo: "52주 가격 위치는 양호하지만 VWAP 또는 종가 위치가 약해 단기 수급 확인이 필요합니다.",
       evidenceKo: `52주 위치 점수 ${formatScore(input.fiftyTwoWeekPositionScore)}점, VWAP 점수 ${formatScore(input.vwapScore)}점, 종가 위치 점수 ${formatScore(input.closePositionScore)}점 기준입니다.`,
       checkPointKo: "고점권 부담이 커지는지, 다음 거래일 VWAP 회복과 종가 위치 개선이 함께 나타나는지 확인해야 합니다.",
-      penalty: 16,
+      penalty: 15,
     });
   }
 
@@ -80,7 +80,7 @@ export function analyzeSignalConflicts(input: SignalConflictInput): SignalConfli
       summaryKo: "전체 리스크는 극단 구간이 아니어도 VWAP 이탈 또는 추세 훼손 같은 핵심 위험이 높을 수 있습니다.",
       evidenceKo: `종합 리스크 ${formatScore(input.totalRiskScore)}점, 추세 붕괴 위험 ${formatScore(input.trendCollapseRisk)}점, VWAP 이탈 위험 ${formatScore(input.vwapBreakdownRisk)}점, VWAP 리스크 ${formatScore(input.vwapRiskScore)}점 기준입니다.`,
       checkPointKo: "전체 점수보다 세부 핵심 위험이 먼저 낮아지는지 확인해야 합니다.",
-      penalty: 16,
+      penalty: 15,
     });
   }
 
@@ -108,9 +108,8 @@ export function analyzeSignalConflicts(input: SignalConflictInput): SignalConfli
     });
   }
 
-  const conflictScore = clampScore(
-    conflicts.reduce((total, conflict) => total + conflict.penalty, 0) + getConflictSeverityBooster(input),
-  );
+  const rawConflictScore = conflicts.reduce((total, conflict) => total + conflict.penalty, 0) + getConflictSeverityBooster(input);
+  const conflictScore = calibrateConflictScore(rawConflictScore, input, conflicts);
   const severity = getConflictSeverity(conflictScore);
 
   return {
@@ -163,13 +162,52 @@ function getConflictSeverityBooster(input: SignalConflictInput): number {
   let booster = 0;
 
   if (valueOr(input.trendCollapseRisk, 0) >= 80 && valueOr(input.closePositionScore, 50) <= 20) {
-    booster += 6;
-  }
-  if (valueOr(input.vwapBreakdownRisk, 0) >= 75 && valueOr(input.vwapScore, 50) <= 35) {
     booster += 4;
   }
+  if (valueOr(input.vwapBreakdownRisk, 0) >= 75 && valueOr(input.vwapScore, 50) <= 35) {
+    booster += 3;
+  }
 
-  return booster;
+  return Math.min(booster, 5);
+}
+
+function calibrateConflictScore(
+  rawScore: number,
+  input: SignalConflictInput,
+  conflicts: SignalConflictInsight[],
+): number {
+  let score = rawScore;
+
+  if (conflicts.length >= 4) {
+    score -= Math.min(3, (conflicts.length - 3) * 2);
+  }
+
+  if (hasOverlappingPriceWeakness(input) && conflicts.length >= 4 && rawScore > 70) {
+    score -= 2;
+  }
+
+  if (!hasExtremeConflictCluster(input)) {
+    score = Math.min(score, 68);
+  }
+
+  return clampScore(score);
+}
+
+function hasOverlappingPriceWeakness(input: SignalConflictInput): boolean {
+  return (
+    valueOr(input.vwapScore, 50) <= 40 &&
+    valueOr(input.closePositionScore, 50) <= 30 &&
+    valueOr(input.trendCollapseRisk, 0) >= 70
+  );
+}
+
+function hasExtremeConflictCluster(input: SignalConflictInput): boolean {
+  return (
+    valueOr(input.trendCollapseRisk, 0) >= 90 &&
+    valueOr(input.vwapBreakdownRisk, 0) >= 85 &&
+    valueOr(input.closePositionScore, 50) <= 10 &&
+    valueOr(input.volatilityRisk, 0) >= 85
+  );
 }
 
 function buildConflictSummary(

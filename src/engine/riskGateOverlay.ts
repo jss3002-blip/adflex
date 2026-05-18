@@ -98,7 +98,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       scoreImpactNoteKo:
         "현재 원점수는 변경하지 않지만, 이 게이트는 향후 riskGatedInterpretationScore에서 VWAP 회복 실패를 단순 평균보다 우선 반영할 수 있는 근거가 됩니다.",
       backtestLabelHint: "vwap_reclaim_failure_label",
-      weight: 18,
+      weight: 15,
     });
   }
 
@@ -116,7 +116,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       scoreImpactNoteKo:
         "현재 finalScore는 그대로 두지만, 약한 종가가 VWAP 약세나 변동성 확대와 결합되면 단순 평균 점수보다 마감 구조를 우선 해석해야 합니다.",
       backtestLabelHint: "weak_close_failure",
-      weight: 14,
+      weight: 11,
     });
   }
 
@@ -134,7 +134,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       scoreImpactNoteKo:
         "현재 상태 분류와 action label은 바꾸지 않지만, 향후에는 추세 유지력 약화가 rawCompositeScore보다 해석 우선순위를 높이는 게이트가 될 수 있습니다.",
       backtestLabelHint: "trend_failure_label",
-      weight: 18,
+      weight: 15,
     });
   }
 
@@ -157,7 +157,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       scoreImpactNoteKo:
         "현재 점수 보정은 적용하지 않지만, 향후에는 높은 변동성과 약한 종가의 결합을 신호 안정성 감점으로 사용할 수 있습니다.",
       backtestLabelHint: "weak_close_after_volatility_label",
-      weight: 14,
+      weight: 10,
     });
   }
 
@@ -179,7 +179,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       scoreImpactNoteKo:
         "현재 volumeScore는 유지하지만, 향후 위험 게이트 해석에서는 거래량이 가격 회복을 동반하지 못한 경우 긍정 해석을 제한할 수 있습니다.",
       backtestLabelHint: "volume_without_recovery_label",
-      weight: 10,
+      weight: 8,
     });
   }
 
@@ -199,7 +199,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       scoreImpactNoteKo:
         "현재 총점과 리스크 점수는 바꾸지 않지만, 향후에는 보조 위험이 높을 때 rawCompositeScore와 risk-gated interpretation을 분리하는 근거가 됩니다.",
       backtestLabelHint: hasNumber(input.falseSignalScore) && input.falseSignalScore >= 80 ? "false_rebound_label" : "signal_conflict_failure_label",
-      weight: 12,
+      weight: 9,
     });
   }
 
@@ -220,7 +220,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       scoreImpactNoteKo:
         "현재 점수는 변경하지 않지만, 향후에는 dataQualityScore가 낮을 때 action strength와 riskGatedInterpretationScore를 제한하는 핵심 게이트가 됩니다.",
       backtestLabelHint: "data_quality_limit_label",
-      weight: 20,
+      weight: 18,
     });
   }
 
@@ -237,7 +237,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       scoreImpactNoteKo:
         "현재 totalRiskScore는 유지하지만, 향후 리스크 게이트 해석에서는 평균 기반 점수보다 집중 위험 조건을 우선 반영할 수 있습니다.",
       backtestLabelHint: "risk_gate_override_label",
-      weight: 12,
+      weight: 8,
     });
   }
 
@@ -254,7 +254,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       scoreImpactNoteKo:
         "현재 state classification은 변경하지 않지만, 향후에는 상태 붕괴 클러스터가 활성화될 때 상태 확정보다 확인 대기 해석을 우선할 수 있습니다.",
       backtestLabelHint: "state_collapse_label",
-      weight: 18,
+      weight: 14,
     });
   }
 
@@ -271,7 +271,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
       scoreImpactNoteKo:
         "현재 점수는 변경하지 않지만, 향후에는 confidenceScore가 낮을 때 강한 판단을 제한하고 사람 검토 성격을 강화할 수 있습니다.",
       backtestLabelHint: "low_confidence_failure_label",
-      weight: 12,
+      weight: 10,
     });
   }
 
@@ -290,7 +290,7 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
   }
 
   const overlayScore = calculateOverlayScore(gates);
-  const severity = getOverlaySeverity(overlayScore);
+  const severity = getOverlaySeverity(overlayScore, gates);
 
   return {
     overlayScore,
@@ -322,24 +322,56 @@ function calculateOverlayScore(gates: RiskGateInsight[]): number {
   let score = gates.reduce((total, gate) => total + gate.weight, 0);
 
   if (hasGate(gates, "VWAP_BREAKDOWN_GATE") && hasGate(gates, "WEAK_CLOSE_GATE")) {
-    score += 5;
+    score += 2;
   }
   if (hasGate(gates, "TREND_COLLAPSE_GATE") && hasGate(gates, "STATE_COLLAPSE_CLUSTER_GATE")) {
-    score += 5;
+    score += 2;
   }
   if (gates.some((gate) => gate.type === "DATA_QUALITY_GATE" && gate.severity === "BLOCK")) {
-    score += 10;
+    score += 6;
+  }
+
+  const overlappingPriceStructureCount = [
+    hasGate(gates, "VWAP_BREAKDOWN_GATE"),
+    hasGate(gates, "WEAK_CLOSE_GATE"),
+    hasGate(gates, "TREND_COLLAPSE_GATE"),
+    hasGate(gates, "VOLATILITY_WEAK_CLOSE_GATE"),
+    hasGate(gates, "STATE_COLLAPSE_CLUSTER_GATE"),
+  ].filter(Boolean).length;
+
+  if (overlappingPriceStructureCount >= 4) {
+    score -= Math.min(8, (overlappingPriceStructureCount - 3) * 4);
   }
 
   return clampOverlayScore(score);
 }
 
-function getOverlaySeverity(score: number): RiskGateSeverity {
+function getOverlaySeverity(score: number, gates: RiskGateInsight[]): RiskGateSeverity {
   if (score === 0) return "NONE";
   if (score < 30) return "WATCH";
   if (score < 55) return "CAUTION";
-  if (score < 80) return "HIGH_RISK";
+  if (!shouldUseBlockSeverity(score, gates)) return "HIGH_RISK";
   return "BLOCK";
+}
+
+function shouldUseBlockSeverity(score: number, gates: RiskGateInsight[]): boolean {
+  if (score < 90) return false;
+  if (hasSevereDataQualityLimit(gates)) return true;
+
+  return (
+    gates.length >= 8 &&
+    hasGate(gates, "STATE_COLLAPSE_CLUSTER_GATE") &&
+    gates.some((gate) => gate.severity === "HIGH_RISK") &&
+    score >= 95
+  );
+}
+
+function hasSevereDataQualityLimit(gates: RiskGateInsight[]): boolean {
+  return gates.some(
+    (gate) =>
+      (gate.type === "DATA_QUALITY_GATE" && (gate.severity === "BLOCK" || gate.severity === "HIGH_RISK")) ||
+      (gate.type === "CONFIDENCE_LIMIT_GATE" && gate.severity === "HIGH_RISK"),
+  );
 }
 
 function getDataQualityGateSeverity(input: RiskGateInput): RiskGateSeverity {
