@@ -1645,7 +1645,7 @@ function getQualitySignalLevelLabel(level: QualitySignalLevel | undefined): stri
   if (level === "CRITICAL") return "구조 점검 필요";
   if (level === "HIGH") return "단기 확인 우선";
   if (level === "MEDIUM") return "회복 신뢰도 확인 필요";
-  if (level === "LOW") return "보조 위험 신호 낮음";
+  if (level === "LOW") return "약한 관찰 단계";
   return "보조 분석 확인";
 }
 

@@ -7,7 +7,8 @@ export type ConflictType =
   | "VOLUME_ACTIVE_BUT_PRICE_WEAK"
   | "RISK_MODERATE_BUT_KEY_RISK_HIGH"
   | "VWAP_WEAK_BUT_VOLUME_ALIVE"
-  | "VOLATILITY_HIGH_WITH_WEAK_CLOSE";
+  | "VOLATILITY_HIGH_WITH_WEAK_CLOSE"
+  | "MILD_VOLATILITY_INTERPRETATION_WATCH";
 
 export type SignalConflictInput = {
   totalScore?: number;
@@ -108,6 +109,20 @@ export function analyzeSignalConflicts(input: SignalConflictInput): SignalConfli
     });
   }
 
+  if (isMildVolatilityInterpretationWatch(input) && conflicts.length === 0) {
+    conflicts.push({
+      type: "MILD_VOLATILITY_INTERPRETATION_WATCH",
+      severity: "LOW",
+      titleKo: "변동성 확대에 따른 해석 불일치 관찰",
+      summaryKo:
+        "종합 구조나 장기 위치가 완전히 약한 상태는 아니지만, 장중 변동성과 VWAP 또는 종가 확인 조건이 함께 있어 낮은 강도의 해석 불일치를 점검해야 합니다.",
+      evidenceKo: `종합 점수 ${formatScore(input.totalScore)}점, 52주 위치 점수 ${formatScore(input.fiftyTwoWeekPositionScore)}점, 변동성 위험 ${formatScore(input.volatilityRisk)}점, 장중 변동폭 ${formatPercent(input.intradayRangePercent)}, VWAP 리스크 ${formatScore(input.vwapRiskScore)}점 기준입니다.`,
+      checkPointKo:
+        "위험 확정이 아니라 관찰 단계입니다. 다음 흐름에서 변동폭이 줄고 VWAP와 종가 위치가 안정적으로 유지되는지 확인해야 합니다.",
+      penalty: 18,
+    });
+  }
+
   const rawConflictScore = conflicts.reduce((total, conflict) => total + conflict.penalty, 0) + getConflictSeverityBooster(input);
   const conflictScore = calibrateConflictScore(rawConflictScore, input, conflicts);
   const severity = getConflictSeverity(conflictScore);
@@ -149,6 +164,19 @@ function isVwapWeakButVolumeAlive(input: SignalConflictInput): boolean {
 
 function isVolatilityHighWithWeakClose(input: SignalConflictInput): boolean {
   return valueOr(input.volatilityRisk, 0) >= 70 && valueOr(input.closePositionScore, 50) <= 30;
+}
+
+function isMildVolatilityInterpretationWatch(input: SignalConflictInput): boolean {
+  const hasDecentStructure = valueOr(input.totalScore, 0) >= 55 || valueOr(input.fiftyTwoWeekPositionScore, 0) >= 60;
+  const hasVolatilityCaution =
+    valueOr(input.volatilityRisk, 0) >= 65 || valueOr(input.intradayRangePercent, 0) >= 8;
+  const hasRecheckCondition =
+    valueOr(input.vwapRiskScore, 0) >= 35 ||
+    valueOr(input.vwapScore, 100) <= 72 ||
+    valueOr(input.closePositionScore, 100) <= 75 ||
+    valueOr(input.trendCollapseRisk, 0) >= 25;
+
+  return hasDecentStructure && hasVolatilityCaution && hasRecheckCondition;
 }
 
 function getConflictSeverity(score: number): ConflictSeverity {
@@ -227,7 +255,7 @@ function getAuxiliarySeverityLabel(severity: ConflictSeverity): string {
   if (severity === "CRITICAL") return "매우 높은 편입니다";
   if (severity === "HIGH") return "높은 편입니다";
   if (severity === "MEDIUM") return "보통 수준입니다";
-  return "낮은 편입니다";
+  return "낮은 강도의 관찰 신호입니다";
 }
 
 function valueOr(value: number | undefined, fallback: number): number {

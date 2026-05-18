@@ -320,6 +320,7 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     vwapDistancePercent: vwap.vwapDistancePercent,
   });
   const falseSignalAnalysis = analyzeFalseSignalRisk({
+    finalScore,
     closePositionScore: ohlc.closePositionScore,
     volumeScore: volume.volumeScore,
     volumeRiskScore: volume.volumeRiskScore,

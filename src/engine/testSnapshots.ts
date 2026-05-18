@@ -240,10 +240,13 @@ function assertModerateCautionAuxiliarySnapshot(
     conflictResult.conflictScore + falseSignalResult.falseSignalScore + overlayResult.overlayScore;
 
   assertGreaterThan("moderateCaution.combinedAuxiliaryScore", combinedAuxiliaryScore, 0);
-  assertEqual("moderateCaution.conflictScore", conflictResult.conflictScore, 0);
-  assertEqual("moderateCaution.falseSignalScore", falseSignalResult.falseSignalScore, 0);
+  assertGreaterThan("moderateCaution.conflictScore", conflictResult.conflictScore, 0);
+  assertBetween("moderateCaution.conflictScore", conflictResult.conflictScore, 12, 28);
+  assertGreaterThan("moderateCaution.falseSignalScore", falseSignalResult.falseSignalScore, 0);
+  assertBetween("moderateCaution.falseSignalScore", falseSignalResult.falseSignalScore, 10, 24);
   assertGreaterThan("moderateCaution.overlayScore", overlayResult.overlayScore, 0);
-  assertLessThan("moderateCaution.overlayScore", overlayResult.overlayScore, 55);
+  assertBetween("moderateCaution.overlayScore", overlayResult.overlayScore, 20, 35);
+  assertEqual("moderateCaution.overlaySeverity", overlayResult.severity, "WATCH");
   assertNotEqual("moderateCaution.overlaySeverity", overlayResult.severity, "HIGH_RISK");
   assertNotEqual("moderateCaution.overlaySeverity", overlayResult.severity, "BLOCK");
 }
@@ -352,6 +355,14 @@ function assertGreaterThan(label: string, actual: number, minimumExclusive: numb
 function assertLessThan(label: string, actual: number, maximumExclusive: number): void {
   if (!Number.isFinite(actual) || actual >= maximumExclusive) {
     throw new Error(`${label} must be less than ${maximumExclusive}. Received: ${actual}.`);
+  }
+}
+
+function assertBetween(label: string, actual: number, minimumInclusive: number, maximumInclusive: number): void {
+  if (!Number.isFinite(actual) || actual < minimumInclusive || actual > maximumInclusive) {
+    throw new Error(
+      `${label} must be between ${minimumInclusive} and ${maximumInclusive}. Received: ${actual}.`,
+    );
   }
 }
 

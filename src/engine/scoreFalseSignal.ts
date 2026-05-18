@@ -7,9 +7,11 @@ export type FalseSignalType =
   | "DISTRIBUTION_RISK"
   | "WEAK_CLOSE_AFTER_VOLATILITY"
   | "VWAP_RECOVERY_FAILURE"
-  | "VOLUME_WITHOUT_PRICE_RECOVERY";
+  | "VOLUME_WITHOUT_PRICE_RECOVERY"
+  | "RECOVERY_RELIABILITY_WATCH";
 
 export type FalseSignalInput = {
+  finalScore?: number;
   closePositionScore?: number;
   volumeScore?: number;
   volumeRiskScore?: number;
@@ -106,6 +108,20 @@ export function analyzeFalseSignalRisk(input: FalseSignalInput): FalseSignalResu
     });
   }
 
+  if (isRecoveryReliabilityWatch(input) && signals.length === 0) {
+    signals.push({
+      type: "RECOVERY_RELIABILITY_WATCH",
+      riskLevel: "LOW",
+      titleKo: "회복 신뢰도 관찰",
+      summaryKo:
+        "확정적인 가짜 신호는 아니지만, 장중 변동성이 큰 상태에서 VWAP 리스크나 종가 확인 조건이 남아 있어 회복 신뢰도를 낮은 강도로 관찰해야 합니다.",
+      evidenceKo: `종합 점수 ${formatScore(input.finalScore)}점, 변동성 위험 ${formatScore(input.volatilityRisk)}점, 장중 변동폭 ${formatPercent(input.intradayRangePercent)}, VWAP 리스크 ${formatScore(input.vwapRiskScore)}점, 종가 위치 점수 ${formatScore(input.closePositionScore)}점 기준입니다.`,
+      checkPointKo:
+        "위험 확정이 아니라 약한 관찰 단계입니다. 다음 흐름에서 변동폭이 완화되고 VWAP와 종가 위치가 함께 안정되는지 확인해야 합니다.",
+      penalty: 14,
+    });
+  }
+
   const rawFalseSignalScore =
     signals.reduce((total, signal) => total + signal.penalty, 0) + getFalseSignalSeverityBooster(input);
   const falseSignalScore = calibrateFalseSignalScore(rawFalseSignalScore, input, signals);
@@ -152,6 +168,18 @@ function isVolumeWithoutPriceRecovery(input: FalseSignalInput): boolean {
     safeNumber(input.volumeScore, 50) >= 50 &&
     (safeNumber(input.closePositionScore, 50) <= 30 || safeNumber(input.vwapScore, 50) <= 40)
   );
+}
+
+function isRecoveryReliabilityWatch(input: FalseSignalInput): boolean {
+  const hasVolatilityCaution =
+    safeNumber(input.intradayRangePercent, 0) >= 8 || safeNumber(input.volatilityRisk, 0) >= 65;
+  const hasRecoveryRecheckCondition =
+    safeNumber(input.vwapRiskScore, 0) >= 35 ||
+    safeNumber(input.closePositionScore, 100) <= 75 ||
+    safeNumber(input.upperWickRatio, 0) >= 25;
+  const isNotCollapsed = safeNumber(input.finalScore, 50) >= 40;
+
+  return hasVolatilityCaution && hasRecoveryRecheckCondition && isNotCollapsed;
 }
 
 function getFalseSignalRiskLevel(score: number): FalseSignalRiskLevel {
@@ -231,7 +259,7 @@ function getAuxiliaryRiskLevelLabel(riskLevel: FalseSignalRiskLevel): string {
   if (riskLevel === "CRITICAL") return "매우 높은 편입니다";
   if (riskLevel === "HIGH") return "높은 편입니다";
   if (riskLevel === "MEDIUM") return "보통 수준입니다";
-  return "낮은 편입니다";
+  return "낮은 강도의 관찰 신호입니다";
 }
 
 function safeNumber(value: number | undefined, fallback: number): number {
