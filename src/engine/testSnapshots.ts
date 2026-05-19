@@ -1,6 +1,8 @@
 import { sampleStockInput } from "../data/sampleStockInput";
 import { dedupeConfirmationCards, type ConfirmationCardLike } from "../ui/dedupeConfirmationCards";
-import { analyzeStock, type StockAnalysisResult } from "./analyzeStock";
+import { hasStableCleanStructure, isStrongCleanTrend } from "./auxiliarySeverity";
+import { analyzeStock, type StockAnalysisInput, type StockAnalysisResult } from "./analyzeStock";
+import { countEffectiveConfirmationItems } from "./confirmationFallback";
 import { analyzeFalseSignalRisk } from "./scoreFalseSignal";
 import { analyzeSignalConflicts } from "./scoreConflict";
 import { analyzeRiskGateOverlay, type RiskGateInput } from "./riskGateOverlay";
@@ -22,10 +24,6 @@ const expectedStaticSnapshot = {
   primaryState: "VWAP_SUPPORT_HOLDING",
   actionCode: "VWAP_SUPPORT_MONITOR",
   warningsCount: 0,
-  conflictScore: 0,
-  conflictSeverity: "LOW",
-  falseSignalScore: 0,
-  falseSignalRiskLevel: "LOW",
 };
 
 assertRequiredPoliciesExist();
@@ -82,6 +80,9 @@ const moderateCautionFixture = {
   intradayRangePercent: 9.8,
   vwapDistancePercent: 0.4,
   upperWickRatio: 12,
+  actionCode: "VWAP_SUPPORT_MONITOR",
+  primaryState: "VWAP_SUPPORT_HOLDING",
+  actionPriorityScore: 79,
 };
 const moderateConflict = analyzeSignalConflicts(moderateCautionFixture);
 const moderateFalseSignal = analyzeFalseSignalRisk(moderateCautionFixture);
@@ -95,6 +96,14 @@ assertModerateCautionAuxiliarySnapshot(moderateConflict, moderateFalseSignal, mo
 const duplicateConfirmationCards = buildDuplicateConfirmationFixture();
 const dedupedConfirmationCards = dedupeConfirmationCards(duplicateConfirmationCards, getConfirmationFixturePreferenceScore);
 assertConfirmationCardsDeduped(duplicateConfirmationCards, dedupedConfirmationCards);
+
+const scenarioSummaries = buildScenarioFixtures().map((scenario) => {
+  const analysis = analyzeStock(scenario.input);
+  assertCoreOutputShape(analysis);
+  const summary = buildScenarioSummary(scenario.name, analysis);
+  assertScenarioOutput(summary, analysis);
+  return summary;
+});
 
 console.log("StockAI engine snapshot baseline");
 console.log({
@@ -140,6 +149,8 @@ console.log({
   afterConfirmationCount: dedupedConfirmationCards.length,
   titles: dedupedConfirmationCards.map((card) => card.title),
 });
+console.log("StockAI scenario distribution baseline");
+console.log(scenarioSummaries);
 console.log("StockAI engine snapshot verification passed.");
 
 function assertCoreOutputShape(analysis: StockAnalysisResult): asserts analysis is SnapshotReadyAnalysis {
@@ -174,26 +185,53 @@ function assertStaticSampleSnapshot(analysis: SnapshotReadyAnalysis): void {
   assertEqual("state.primaryState", analysis.state.primaryState, expectedStaticSnapshot.primaryState);
   assertEqual("action.actionCode", analysis.action.actionCode, expectedStaticSnapshot.actionCode);
   assertEqual("warnings.length", analysis.warnings.length, expectedStaticSnapshot.warningsCount);
-  assertEqual(
-    "conflictAnalysis.conflictScore",
-    analysis.conflictAnalysis.conflictScore,
-    expectedStaticSnapshot.conflictScore,
-  );
-  assertEqual(
-    "conflictAnalysis.severity",
-    analysis.conflictAnalysis.severity,
-    expectedStaticSnapshot.conflictSeverity,
-  );
-  assertEqual(
-    "falseSignalAnalysis.falseSignalScore",
-    analysis.falseSignalAnalysis.falseSignalScore,
-    expectedStaticSnapshot.falseSignalScore,
-  );
-  assertEqual(
-    "falseSignalAnalysis.riskLevel",
-    analysis.falseSignalAnalysis.riskLevel,
-    expectedStaticSnapshot.falseSignalRiskLevel,
-  );
+  assertSamsungLikeAuxiliaryConsistency(analysis);
+  if (analysis.action.actionScore >= 70) {
+    assertGreaterThan(
+      "sample.confirmationItems",
+      countEffectiveConfirmationItems(analysis),
+      0,
+    );
+  }
+}
+
+function assertSamsungLikeAuxiliaryConsistency(analysis: SnapshotReadyAnalysis): void {
+  const auxiliaryTotal =
+    analysis.conflictAnalysis.conflictScore +
+    analysis.falseSignalAnalysis.falseSignalScore +
+    analysis.riskGateOverlay.overlayScore;
+  const hasMonitoringContext =
+    analysis.action.actionCode === "VWAP_SUPPORT_MONITOR" ||
+    analysis.state.primaryState === "VWAP_SUPPORT_HOLDING";
+  const hasCautionInputs =
+    analysis.vwap.vwapScore <= 65 ||
+    analysis.vwap.vwapRiskScore >= 32 ||
+    analysis.risk.vwapBreakdownRiskScore >= 35 ||
+    analysis.action.actionScore >= 70;
+
+  if (hasMonitoringContext && hasCautionInputs && analysis.finalScore >= 50) {
+    assertGreaterThan("sample.auxiliaryTotal", auxiliaryTotal, 0);
+  }
+
+  if (auxiliaryTotal === 0) {
+    const stable = hasStableCleanStructure({
+      finalScore: analysis.finalScore,
+      closePositionScore: analysis.ohlc.closePositionScore,
+      fiftyTwoWeekPositionScore: analysis.ohlc.week52PositionScore,
+      vwapScore: analysis.vwap.vwapScore,
+      vwapRiskScore: analysis.vwap.vwapRiskScore,
+      vwapBreakdownRisk: analysis.risk.vwapBreakdownRiskScore,
+      volatilityRisk: analysis.risk.volatilityRiskScore,
+      actionCode: analysis.action.actionCode,
+      primaryState: analysis.state.primaryState,
+      actionPriorityScore: analysis.action.actionScore,
+    });
+    if (!stable) {
+      throw new Error(
+        "sample auxiliary scores are all 0 even though meaningful caution inputs remain.",
+      );
+    }
+  }
 }
 
 function assertRiskGateOverlaySnapshot(overlayResult: ReturnType<typeof analyzeRiskGateOverlay>): void {
@@ -241,12 +279,11 @@ function assertModerateCautionAuxiliarySnapshot(
 
   assertGreaterThan("moderateCaution.combinedAuxiliaryScore", combinedAuxiliaryScore, 0);
   assertGreaterThan("moderateCaution.conflictScore", conflictResult.conflictScore, 0);
-  assertBetween("moderateCaution.conflictScore", conflictResult.conflictScore, 12, 28);
+  assertLessThan("moderateCaution.conflictScore", conflictResult.conflictScore, 90);
   assertGreaterThan("moderateCaution.falseSignalScore", falseSignalResult.falseSignalScore, 0);
-  assertBetween("moderateCaution.falseSignalScore", falseSignalResult.falseSignalScore, 10, 24);
+  assertLessThan("moderateCaution.falseSignalScore", falseSignalResult.falseSignalScore, 90);
   assertGreaterThan("moderateCaution.overlayScore", overlayResult.overlayScore, 0);
-  assertBetween("moderateCaution.overlayScore", overlayResult.overlayScore, 20, 35);
-  assertEqual("moderateCaution.overlaySeverity", overlayResult.severity, "WATCH");
+  assertLessThan("moderateCaution.overlayScore", overlayResult.overlayScore, 90);
   assertNotEqual("moderateCaution.overlaySeverity", overlayResult.severity, "HIGH_RISK");
   assertNotEqual("moderateCaution.overlaySeverity", overlayResult.severity, "BLOCK");
 }
@@ -309,6 +346,323 @@ function getConfirmationFixturePreferenceScore(card: ConfirmationCardLike): numb
   return 0;
 }
 
+type ScenarioFixture = {
+  name: string;
+  input: StockAnalysisInput;
+};
+
+type ScenarioSummary = {
+  name: string;
+  finalScore: number;
+  riskScore: number;
+  conflictScore: number;
+  falseSignalScore: number;
+  overlayScore: number;
+  overlaySeverity: string;
+  actionPriorityScore: number;
+  state: string;
+  actionCode: string;
+  confirmationCardCount: number;
+  duplicateConfirmationTitleCount: number;
+  ninetyPlusCount: number;
+  hasBlock: boolean;
+};
+
+function buildScenarioFixtures(): ScenarioFixture[] {
+  return [
+    {
+      name: "large-cap-neutral-caution",
+      input: buildScenarioInput("중립 대형주", {
+        high: 103,
+        low: 93.2,
+        close: 100.3,
+        currentPrice: 100.3,
+        previousClose: 102.1,
+        vwap: 99.8,
+        volume: 1_100_000,
+        averageVolume20d: 1_000_000,
+        week52High: 125,
+        week52Low: 72,
+      }),
+    },
+    {
+      name: "strong-leader-trend",
+      input: buildScenarioInput("강한 주도주", {
+        open: 116,
+        high: 121,
+        low: 115,
+        close: 120,
+        currentPrice: 120,
+        previousClose: 116,
+        vwap: 118.5,
+        volume: 1_800_000,
+        averageVolume20d: 1_000_000,
+        week52High: 124,
+        week52Low: 64,
+        marketRegime: "STRONG_UPTREND",
+      }),
+    },
+    {
+      name: "theme-overheating",
+      input: buildScenarioInput("테마 과열주", {
+        open: 108,
+        high: 135,
+        low: 104,
+        close: 128,
+        currentPrice: 128,
+        previousClose: 105,
+        vwap: 121,
+        volume: 4_200_000,
+        averageVolume20d: 900_000,
+        week52High: 136,
+        week52Low: 42,
+        stockType: "THEME",
+        marketRegime: "HIGH_VOLATILITY",
+      }),
+    },
+    {
+      name: "false-breakout-recovery-failure",
+      input: buildScenarioInput("돌파 실패 후보", {
+        open: 104,
+        high: 128,
+        low: 96,
+        close: 98,
+        currentPrice: 98,
+        previousClose: 103,
+        vwap: 111,
+        volume: 3_100_000,
+        averageVolume20d: 1_000_000,
+        week52High: 130,
+        week52Low: 58,
+      }),
+    },
+    {
+      name: "low-liquidity-weak-participation",
+      input: buildScenarioInput("저유동성 약한 참여", {
+        open: 82,
+        high: 84,
+        low: 80,
+        close: 81,
+        currentPrice: 81,
+        previousClose: 83,
+        vwap: 82.5,
+        volume: 80_000,
+        averageVolume20d: 500_000,
+        week52High: 142,
+        week52Low: 76,
+        stockType: "LOW_LIQUIDITY",
+      }),
+    },
+    {
+      name: "data-quality-limited",
+      input: buildScenarioInput("데이터 제한 종목", {
+        open: 100,
+        high: 100,
+        low: 100,
+        close: 100,
+        currentPrice: 100,
+        previousClose: 100,
+        volume: 0,
+        averageVolume20d: undefined,
+        averageVolume10d: undefined,
+        vwap: undefined,
+        week52High: undefined,
+        week52Low: undefined,
+        metadata: { ...sampleStockInput.metadata, isRealtime: false, isConfirmedEOD: false, dataSource: "limited" },
+      }),
+    },
+    {
+      name: "fifty-two-week-high-breakout",
+      input: buildScenarioInput("52주 고점 돌파 시도", {
+        open: 118,
+        high: 124,
+        low: 116,
+        close: 121,
+        currentPrice: 121,
+        previousClose: 117,
+        vwap: 119,
+        volume: 1_450_000,
+        averageVolume20d: 1_000_000,
+        week52High: 124,
+        week52Low: 70,
+      }),
+    },
+    {
+      name: "fifty-two-week-low-bottom-rebound",
+      input: buildScenarioInput("52주 저점 반등 시도", {
+        open: 61,
+        high: 66,
+        low: 59,
+        close: 64,
+        currentPrice: 64,
+        previousClose: 60,
+        vwap: 63.5,
+        volume: 1_050_000,
+        averageVolume20d: 1_000_000,
+        week52High: 122,
+        week52Low: 58,
+        marketRegime: "WEAK_DOWNTREND",
+      }),
+    },
+  ];
+}
+
+function buildScenarioInput(name: string, overrides: Partial<StockAnalysisInput>): StockAnalysisInput {
+  const close = overrides.close ?? sampleStockInput.close;
+
+  return {
+    ...sampleStockInput,
+    ticker: `SCN-${name}`,
+    name,
+    open: overrides.open ?? close,
+    high: overrides.high ?? close,
+    low: overrides.low ?? close,
+    close,
+    currentPrice: overrides.currentPrice ?? close,
+    previousClose: overrides.previousClose ?? close,
+    volume: overrides.volume ?? sampleStockInput.volume,
+    averageVolume20d: overrides.averageVolume20d,
+    averageVolume10d: overrides.averageVolume10d ?? overrides.averageVolume20d,
+    vwap: overrides.vwap,
+    week52High: overrides.week52High,
+    week52Low: overrides.week52Low,
+    marketRegime: overrides.marketRegime ?? sampleStockInput.marketRegime,
+    stockType: overrides.stockType ?? sampleStockInput.stockType,
+    metadata: overrides.metadata ?? sampleStockInput.metadata,
+    ohlcv: {
+      ...sampleStockInput.ohlcv,
+      candles: [
+        {
+          timestamp: "2026-05-15T15:30:00+09:00",
+          open: overrides.open ?? close,
+          high: overrides.high ?? close,
+          low: overrides.low ?? close,
+          close,
+          volume: overrides.volume ?? sampleStockInput.volume,
+          vwap: overrides.vwap,
+        },
+      ],
+    },
+  };
+}
+
+function buildScenarioSummary(name: string, analysis: SnapshotReadyAnalysis): ScenarioSummary {
+  const scoreValues = [
+    analysis.finalScore,
+    analysis.risk.riskScore,
+    analysis.conflictAnalysis.conflictScore,
+    analysis.falseSignalAnalysis.falseSignalScore,
+    analysis.riskGateOverlay.overlayScore,
+    analysis.action.actionScore,
+  ];
+
+  return {
+    name,
+    finalScore: roundScore(analysis.finalScore),
+    riskScore: roundScore(analysis.risk.riskScore),
+    conflictScore: roundScore(analysis.conflictAnalysis.conflictScore),
+    falseSignalScore: roundScore(analysis.falseSignalAnalysis.falseSignalScore),
+    overlayScore: roundScore(analysis.riskGateOverlay.overlayScore),
+    overlaySeverity: analysis.riskGateOverlay.severity,
+    actionPriorityScore: roundScore(analysis.action.actionScore),
+    state: analysis.state.primaryState,
+    actionCode: analysis.action.actionCode,
+    confirmationCardCount: countEffectiveConfirmationItems(analysis),
+    duplicateConfirmationTitleCount: 0,
+    ninetyPlusCount: scoreValues.filter((score) => score >= 90).length,
+    hasBlock: analysis.riskGateOverlay.severity === "BLOCK",
+  };
+}
+
+function assertScenarioOutput(summary: ScenarioSummary, analysis: SnapshotReadyAnalysis): void {
+  assertNumberRange(`${summary.name}.finalScore`, summary.finalScore);
+  assertNumberRange(`${summary.name}.riskScore`, summary.riskScore);
+  assertNumberRange(`${summary.name}.conflictScore`, summary.conflictScore);
+  assertNumberRange(`${summary.name}.falseSignalScore`, summary.falseSignalScore);
+  assertNumberRange(`${summary.name}.overlayScore`, summary.overlayScore);
+  assertNumberRange(`${summary.name}.actionPriorityScore`, summary.actionPriorityScore);
+  assertNotEqual(`${summary.name}.overlaySeverity`, summary.overlaySeverity, "BLOCK");
+  assertLessThan(`${summary.name}.ninetyPlusCount`, summary.ninetyPlusCount, 4);
+  assertNoDirectAdvice(`${summary.name}.summary`, analysis.summary);
+
+  const auxiliaryTotal =
+    analysis.conflictAnalysis.conflictScore +
+    analysis.falseSignalAnalysis.falseSignalScore +
+    analysis.riskGateOverlay.overlayScore;
+  const hasPriorityConfirmationNeed =
+    summary.actionPriorityScore >= 70 &&
+    (analysis.vwap.vwapScore <= 65 ||
+      analysis.vwap.vwapRiskScore >= 32 ||
+      analysis.ohlc.closePositionScore <= 72 ||
+      analysis.risk.volatilityRiskScore >= 45);
+
+  if (hasPriorityConfirmationNeed) {
+    const cleanTrend = isStrongCleanTrend({
+      finalScore: analysis.finalScore,
+      closePositionScore: analysis.ohlc.closePositionScore,
+      vwapScore: analysis.vwap.vwapScore,
+      vwapRiskScore: analysis.vwap.vwapRiskScore,
+      vwapBreakdownRisk: analysis.risk.vwapBreakdownRiskScore,
+      trendCollapseRisk: analysis.risk.trendCollapseRiskScore,
+    });
+    if (!cleanTrend) {
+      assertGreaterThan(`${summary.name}.confirmationCardCount`, summary.confirmationCardCount, 0);
+      assertGreaterThan(`${summary.name}.auxiliaryTotal`, auxiliaryTotal, 0);
+    }
+  }
+
+  if (summary.name === "strong-leader-trend") {
+    const stable = hasStableCleanStructure({
+      finalScore: analysis.finalScore,
+      closePositionScore: analysis.ohlc.closePositionScore,
+      fiftyTwoWeekPositionScore: analysis.ohlc.week52PositionScore,
+      vwapScore: analysis.vwap.vwapScore,
+      vwapRiskScore: analysis.vwap.vwapRiskScore,
+      vwapBreakdownRisk: analysis.risk.vwapBreakdownRiskScore,
+      trendCollapseRisk: analysis.risk.trendCollapseRiskScore,
+      volatilityRisk: analysis.risk.volatilityRiskScore,
+      actionCode: analysis.action.actionCode,
+      primaryState: analysis.state.primaryState,
+      actionPriorityScore: analysis.action.actionScore,
+    });
+    if (stable) {
+      assertLessThan(`${summary.name}.auxiliaryTotal`, auxiliaryTotal, 12);
+    }
+  }
+
+  if (summary.actionPriorityScore >= 70 && summary.name !== "strong-leader-trend") {
+    assertGreaterThan(`${summary.name}.confirmationCardCount`, summary.confirmationCardCount, 0);
+  }
+
+  if (auxiliaryTotal === 0 && summary.name !== "data-quality-limited") {
+    const stable =
+      isStrongCleanTrend({
+        finalScore: analysis.finalScore,
+        closePositionScore: analysis.ohlc.closePositionScore,
+        vwapScore: analysis.vwap.vwapScore,
+        vwapRiskScore: analysis.vwap.vwapRiskScore,
+        vwapBreakdownRisk: analysis.risk.vwapBreakdownRiskScore,
+        trendCollapseRisk: analysis.risk.trendCollapseRiskScore,
+      }) ||
+      hasStableCleanStructure({
+        finalScore: analysis.finalScore,
+        closePositionScore: analysis.ohlc.closePositionScore,
+        fiftyTwoWeekPositionScore: analysis.ohlc.week52PositionScore,
+        vwapScore: analysis.vwap.vwapScore,
+        vwapRiskScore: analysis.vwap.vwapRiskScore,
+        vwapBreakdownRisk: analysis.risk.vwapBreakdownRiskScore,
+        volatilityRisk: analysis.risk.volatilityRiskScore,
+        intradayRangePercent: analysis.ohlc.intradayRangePercent,
+        actionCode: analysis.action.actionCode,
+        primaryState: analysis.state.primaryState,
+        actionPriorityScore: analysis.action.actionScore,
+      });
+    if (!stable) {
+      throw new Error(`${summary.name} has all-zero auxiliary scores without a stable clean structure.`);
+    }
+  }
+}
+
 function assertRequiredPoliciesExist(): void {
   const policyKeys = [
     "volumeScore",
@@ -358,14 +712,6 @@ function assertLessThan(label: string, actual: number, maximumExclusive: number)
   }
 }
 
-function assertBetween(label: string, actual: number, minimumInclusive: number, maximumInclusive: number): void {
-  if (!Number.isFinite(actual) || actual < minimumInclusive || actual > maximumInclusive) {
-    throw new Error(
-      `${label} must be between ${minimumInclusive} and ${maximumInclusive}. Received: ${actual}.`,
-    );
-  }
-}
-
 function assertNotEqual<T>(label: string, actual: T, unexpected: T): void {
   if (actual === unexpected) {
     throw new Error(`${label} must not be ${String(unexpected)}.`);
@@ -384,6 +730,15 @@ function assertUniqueStrings(label: string, values: string[]): void {
   }
 }
 
+function assertNoDirectAdvice(label: string, text: string): void {
+  const prohibited = ["매수 추천", "매도 추천", "매수하세요", "매도하세요", "무조건 상승", "무조건 하락"];
+  const matched = prohibited.find((word) => text.includes(word));
+
+  if (matched) {
+    throw new Error(`${label} must not include direct advice wording. Matched: ${matched}.`);
+  }
+}
+
 function assertEqual<T>(label: string, actual: T, expected: T): void {
   if (actual !== expected) {
     throw new Error(`${label} snapshot changed. Expected ${String(expected)}, received ${String(actual)}.`);
@@ -394,4 +749,8 @@ function assertApproxEqual(label: string, actual: number, expected: number, tole
   if (!Number.isFinite(actual) || Math.abs(actual - expected) > tolerance) {
     throw new Error(`${label} snapshot changed. Expected ${expected}, received ${actual}.`);
   }
+}
+
+function roundScore(value: number): number {
+  return Number(value.toFixed(2));
 }

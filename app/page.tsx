@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { buildDynamicConfirmationFallbacks } from "@/src/engine/confirmationFallback";
 import { dedupeConfirmationCards } from "@/src/ui/dedupeConfirmationCards";
 
 type IconName =
@@ -204,6 +205,13 @@ type RiskGateOverlayViewResult = {
   summaryKo: string;
   interpretationKo: string;
   recommendedActionBiasKo: string;
+};
+
+type CompactExplanation = {
+  meaning: string;
+  reason: string;
+  nextCheck: string;
+  caution: string;
 };
 
 type YahooProviderDiagnostics = {
@@ -473,11 +481,11 @@ export default function Home() {
                 hasResult ? "text-4xl sm:text-5xl lg:text-6xl" : "text-5xl sm:text-6xl lg:text-7xl"
               }`}
             >
-              실시간 데이터 기반 투자 분석 플랫폼
+              데이터가 아닌 인사이트를 제공하는 AI 투자 판단 보조 플랫폼
             </h1>
             <p className={`max-w-2xl text-pretty leading-8 text-white/62 ${hasResult ? "text-base" : "text-lg"}`}>
-              뉴스, 수급, 변동성, 기술적 지표를 AI가 종합 분석해 투자 판단에 필요한 핵심 인사이트를
-              제공합니다.
+              StockAI는 하나의 점수로 종목을 단정하지 않고, 신호의 역할을 분리해 다음 확인 조건까지
+              제시합니다.
             </p>
           </div>
 
@@ -759,8 +767,9 @@ export default function Home() {
                 데이터가 아닌 인사이트를 제공합니다
               </h2>
               <p className="mt-5 text-base leading-8 text-white/58">
-                StockAI 엔진은 가격, 거래량, 변동성, 뉴스, 수급 흐름, 리스크 신호를 하나의 AI 점수로 통합합니다.
-                단순한 차트 요약이 아니라 투자 판단에 필요한 방향성, 위험 구간, 관찰 지표를 함께 제공합니다.
+                StockAI 엔진은 가격, 거래량, VWAP, 변동성, 리스크 신호를 단순 나열하지 않고 현재 의미와
+                다음 확인 조건으로 변환합니다. 직접적인 판단 명령이 아니라 고객이 신호의 역할을 이해하도록 돕는
+                해석 엔진입니다.
               </p>
             </div>
 
@@ -803,7 +812,8 @@ function AnalysisResultCard({
   const confirmedStockName = result.normalized?.name || "확인 대기";
   const confirmedTicker = result.normalized?.ticker || "";
   const sourceLabel = meta.freshness?.sourceLabel || "샘플 데이터";
-  const modeNotice = getDataModeNotice(meta.freshness, meta.warning);
+  const dataFreshnessNotice = getDataFreshnessNotice(meta.freshness, result);
+  const modeNotice = getDataModeNotice(meta.freshness, meta.warning, Boolean(dataFreshnessNotice));
   const dataBasisLabel = getDataBasisLabel(result);
   const dataBasisValue = formatDataBasis(result);
   const topConfirmationCards = getTopConfirmationCards(result.warnings, result, 3);
@@ -837,15 +847,15 @@ function AnalysisResultCard({
           </p>
         ) : null}
         <p className="text-xs leading-6 text-white/55">기준 유형: {getDataBasisType(result, meta.freshness)}</p>
-        <p className="mt-2 text-xs leading-6 text-white/45">
-          {modeNotice}
-        </p>
-        {meta.freshness?.provider === "yahoo-finance" ? (
-          <p className="mt-1 text-xs leading-6 text-white/38">
-            {meta.freshness.cautionMessage}
+        <p className="mt-2 text-xs leading-6 text-white/45">{modeNotice}</p>
+        {dataFreshnessNotice ? (
+          <p className="mt-1 rounded-2xl border border-amber-300/15 bg-amber-300/[0.055] p-3 text-xs leading-6 text-amber-50/72">
+            {dataFreshnessNotice}
           </p>
         ) : null}
       </div>
+
+      <StockAiInterpretationPhilosophy />
 
       <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -923,6 +933,38 @@ function AnalysisResultCard({
         sourceLabel={sourceLabel}
         freshness={meta.freshness}
       />
+    </div>
+  );
+}
+
+function StockAiInterpretationPhilosophy() {
+  const roles = [
+    ["종합 점수", "전체 구조"],
+    ["리스크 점수", "위험 수준"],
+    ["신호 충돌", "지표 불일치"],
+    ["가짜 신호 위험", "회복 신뢰도"],
+    ["리스크 게이트", "해석 제한"],
+    ["대응 우선순위", "먼저 볼 신호"],
+  ];
+
+  return (
+    <div className="mt-4 rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.045] p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-cyan-100">StockAI 해석 방식</p>
+          <p className="mt-2 text-xs leading-6 text-cyan-50/68">
+            하나의 점수로 단정하지 않고, 신호의 역할을 분리해 다음 확인 조건까지 제시합니다.
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[32rem]">
+          {roles.map(([label, value]) => (
+            <div key={label} className="rounded-2xl border border-white/10 bg-black/18 px-3 py-2">
+              <p className="text-[10px] font-semibold text-cyan-100/65">{label}</p>
+              <p className="mt-1 text-xs text-white/76">{value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1089,10 +1131,16 @@ function DetailedAnalysisSection({
 
 function ReasoningSection({ result }: { result: StockAnalysisViewResult }) {
   const reasons = buildStateReasoning(result);
+  const currentInterpretation = buildCurrentStateInterpretation(result);
+  const nextCheck = getNextSessionCheck(result);
 
   return (
     <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
       <p className="text-sm font-semibold text-cyan-200/80">왜 이 상태로 분류됐나요?</p>
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <ExplanationRow label="핵심 해석" value={currentInterpretation} />
+        <ExplanationRow label="다음 확인 조건" value={nextCheck} />
+      </div>
       <ul className="mt-3 space-y-2 text-xs leading-6 text-white/68">
         {reasons.map((reason) => (
           <li key={reason} className="rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2">
@@ -1101,6 +1149,15 @@ function ReasoningSection({ result }: { result: StockAnalysisViewResult }) {
         ))}
       </ul>
       <p className="mt-3 text-xs leading-6 text-white/50">{buildCrossScoreInterpretation(result)}</p>
+    </div>
+  );
+}
+
+function ExplanationRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+      <p className="text-[11px] font-semibold text-cyan-100/70">{label}</p>
+      <p className="mt-1 text-xs leading-5 text-white/68">{value}</p>
     </div>
   );
 }
@@ -1131,25 +1188,20 @@ function QualitySignalsSection({ result }: { result: StockAnalysisViewResult }) 
       <div className="mb-4">
         <p className="text-sm font-semibold text-orange-100">분석 품질 보강 신호</p>
         <p className="mt-1 text-xs leading-5 text-white/50">
-          이 영역의 점수들은 모두 같은 의미의 위험 점수가 아닙니다. 신호 충돌은 지표 간 불일치, 가짜 신호
-          위험은 회복 신뢰도, 리스크 게이트는 원점수 해석 제한, 대응 우선순위는 확인 순서를 나타냅니다.
-          따라서 서로 직접 비교하기보다 각각의 역할에 따라 해석해야 합니다.
+          StockAI는 상승·하락을 단정하지 않고 신호가 얼마나 일관적인지, 회복 신뢰도가 충분한지, 원점수 해석에
+          제한이 필요한지를 분리해 보여줍니다.
         </p>
       </div>
       <div className="grid gap-3 lg:grid-cols-3">
         <QualitySignalPanel
           title="신호 충돌 분석"
           score={result.conflictAnalysis?.conflictScore}
-          level={result.conflictAnalysis?.severity}
-          summary={result.conflictAnalysis?.summaryKo}
           items={result.conflictAnalysis?.conflicts}
           emptyMessage="현재 추가적인 신호 충돌은 크게 감지되지 않았습니다."
         />
         <QualitySignalPanel
           title="가짜 신호 위험"
           score={result.falseSignalAnalysis?.falseSignalScore}
-          level={result.falseSignalAnalysis?.riskLevel}
-          summary={result.falseSignalAnalysis?.summaryKo}
           items={result.falseSignalAnalysis?.signals}
           emptyMessage="현재 뚜렷한 가짜 강세 위험은 제한적입니다."
         />
@@ -1170,8 +1222,9 @@ function RiskGateOverlayPanel({ overlay }: { overlay: RiskGateOverlayViewResult 
   }
 
   const safeScore = clampUiScore(overlay.overlayScore);
-  const colorClass = getRiskGateOverlayColor(safeScore, overlay.severity);
+  const colorClass = getAuxiliaryScoreColor(safeScore);
   const activeGates = (overlay.gates || []).slice(0, 3);
+  const explanation = buildRiskGateExplanation(activeGates);
 
   return (
     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -1181,7 +1234,7 @@ function RiskGateOverlayPanel({ overlay }: { overlay: RiskGateOverlayViewResult 
           <p className="mt-2 text-2xl font-semibold text-white">{formatScore(safeScore)}점 / 100점</p>
         </div>
         <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${colorClass.badge}`}>
-          {getRiskGateSeverityLabel(overlay.severity)}
+          {getAuxiliaryScoreLabel(safeScore)}
         </span>
       </div>
       <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/10">
@@ -1190,35 +1243,19 @@ function RiskGateOverlayPanel({ overlay }: { overlay: RiskGateOverlayViewResult 
           style={{ width: `${safeScore}%` }}
         />
       </div>
-      <p className="mt-3 text-xs leading-6 text-white/58">{overlay.summaryKo}</p>
-      <p className="mt-2 text-[11px] leading-5 text-white/48">{overlay.interpretationKo}</p>
-      <p className="mt-2 text-[11px] leading-5 text-white/48">
-        이 점수는 종목 전체 위험도나 매수/매도 판단이 아니라, 원점수가 무난해 보여도 핵심 구조 위험 때문에
-        해석을 얼마나 신중하게 해야 하는지를 나타내는 보조 해석 점수입니다.
-      </p>
-      <p className="mt-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-5 text-orange-100/72">
-        {overlay.recommendedActionBiasKo}
-      </p>
-      <p className="mt-2 text-[11px] leading-5 text-white/42">
-        이 항목은 현재 finalScore, riskScore, 상태 분류, 대응 라벨을 변경하지 않습니다. 원점수 해석을 더
-        신중하게 볼 필요가 있는지 확인하는 구조 해석 계층입니다.
-      </p>
+      <CompactExplanationRows explanation={explanation} />
       {activeGates.length > 0 ? (
-        <div className="mt-4 space-y-3">
-          {activeGates.map((gate) => (
-            <div key={gate.titleKo} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold text-white/82">{gate.titleKo}</p>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getRiskGateOverlayColor(0, gate.severity).badge}`}>
-                  {getRiskGateSeverityLabel(gate.severity)}
-                </span>
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[11px] font-semibold text-white/55">감지된 게이트</p>
+          <div className="mt-3 space-y-2">
+            {activeGates.map((gate) => (
+              <div key={gate.titleKo} className="rounded-xl border border-white/10 bg-black/15 px-3 py-2">
+                <p className="text-xs font-semibold text-white/82">- {gate.titleKo}</p>
+                <p className="mt-1 text-[11px] leading-5 text-white/50">{formatDetectedBasis(gate.evidenceKo)}</p>
+                <p className="mt-1 text-[11px] leading-5 text-orange-100/70">{formatDetectedCheck(gate.actionKo)}</p>
               </div>
-              <p className="mt-2 text-xs leading-5 text-white/58">{gate.summaryKo}</p>
-              <p className="mt-2 text-[11px] leading-5 text-white/45">{gate.evidenceKo}</p>
-              <p className="mt-2 text-[11px] leading-5 text-orange-100/70">{gate.actionKo}</p>
-              <p className="mt-2 text-[11px] leading-5 text-white/42">{gate.scoreImpactNoteKo}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ) : (
         <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
@@ -1232,26 +1269,54 @@ function RiskGateOverlayPanel({ overlay }: { overlay: RiskGateOverlayViewResult 
   );
 }
 
+function buildQualitySignalExplanation(title: string): CompactExplanation {
+  const isConflict = title === "신호 충돌 분석";
+
+  if (isConflict) {
+    return {
+      meaning: "긍정 신호와 단기 확인 신호가 얼마나 엇갈리는지 보는 보조 지표입니다.",
+      reason: "긍정적으로 보이는 지표와 단기 확인 신호가 함께 감지되었습니다.",
+      nextCheck: "다음 거래일 변동폭, VWAP, 종가 위치가 같은 방향으로 유지되는지 확인해야 합니다.",
+      caution: "이 점수는 종목 전체 위험도나 직접적인 방향 판단이 아닙니다.",
+    };
+  }
+
+  return {
+    meaning: "반등처럼 보이는 움직임이 실제 회복으로 이어질 신뢰도를 점검하는 보조 지표입니다.",
+    reason: "장중 변동성이 큰 상태에서 회복 신뢰도를 바로 단정하기 어렵습니다.",
+    nextCheck: "가격이 VWAP 위에서 유지되고 종가 위치가 개선되는지 확인해야 합니다.",
+    caution: "이 점수는 하락 예측이 아니라 회복 신뢰도 점검 신호입니다.",
+  };
+}
+
+function buildRiskGateExplanation(activeGates: RiskGateInsightViewResult[]): CompactExplanation {
+  return {
+    meaning: "원점수가 무난해 보여도 해석을 더 신중하게 봐야 하는 구조 조건을 표시합니다.",
+    reason:
+      activeGates.length > 0
+        ? "원점수만으로는 놓치기 쉬운 구조 확인 조건이 일부 활성화되었습니다."
+        : "현재 활성화된 리스크 게이트는 없습니다.",
+    nextCheck: "다음 흐름에서 변동폭, VWAP, 종가 안정성이 유지되는지 확인해야 합니다.",
+    caution: "이 항목은 finalScore, riskScore, 상태 분류를 직접 변경하지 않습니다.",
+  };
+}
+
 function QualitySignalPanel({
   title,
   score,
-  level,
-  summary,
   items,
   emptyMessage,
 }: {
   title: string;
   score: number | undefined;
-  level: QualitySignalLevel | undefined;
-  summary: string | undefined;
   items: QualitySignalInsight[] | undefined;
   emptyMessage: string;
 }) {
   const safeScore = clampUiScore(score || 0);
-  const levelLabel = getQualitySignalLevelLabel(level);
-  const colorClass = getActionPriorityColor(safeScore);
+  const levelLabel = getAuxiliaryScoreLabel(safeScore);
+  const colorClass = getAuxiliaryScoreColor(safeScore);
   const displayItems = (items || []).slice(0, 3);
-  const helperText = getQualitySignalHelperText(title);
+  const explanation = buildQualitySignalExplanation(title);
 
   return (
     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -1270,41 +1335,70 @@ function QualitySignalPanel({
           style={{ width: `${safeScore}%` }}
         />
       </div>
-      <p className="mt-3 text-xs leading-6 text-white/58">
-        {summary || emptyMessage}
-      </p>
-      <p className="mt-2 text-[11px] leading-5 text-white/48">{helperText}</p>
-      {safeScore >= 85 ? (
-        <p className="mt-2 text-[11px] leading-5 text-orange-100/70">
-          구조 점검 필요성이 강하게 나타난 상태입니다. 직접적인 매수/매도 판단이 아니라 단기 확인 우선순위가
-          높다는 뜻으로 해석하세요.
-        </p>
-      ) : (
-        <p className="mt-2 text-[11px] leading-5 text-white/42">
-          직접적인 매수/매도 판단이 아니라 구조 점검을 돕는 보조 위험 신호입니다.
-        </p>
-      )}
+      <CompactExplanationRows explanation={explanation} />
       {displayItems.length > 0 ? (
-        <div className="mt-4 space-y-3">
-          {displayItems.map((item) => (
-            <div key={item.titleKo} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold text-white/82">{item.titleKo}</p>
-                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/60">
-                  {getQualitySignalLevelLabel(item.severity || item.riskLevel)}
-                </span>
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[11px] font-semibold text-white/55">감지된 세부 신호</p>
+          <div className="mt-3 space-y-2">
+            {displayItems.map((item) => (
+              <div key={item.titleKo} className="rounded-xl border border-white/10 bg-black/15 px-3 py-2">
+                <p className="text-xs font-semibold text-white/82">- {item.titleKo}</p>
+                <p className="mt-1 text-[11px] leading-5 text-white/50">{formatDetectedBasis(item.evidenceKo)}</p>
+                <p className="mt-1 text-[11px] leading-5 text-orange-100/70">{formatDetectedCheck(item.checkPointKo)}</p>
               </div>
-              <p className="mt-2 text-xs leading-5 text-white/58">{item.summaryKo}</p>
-              <p className="mt-2 text-[11px] leading-5 text-white/45">{item.evidenceKo}</p>
-              <p className="mt-2 text-[11px] leading-5 text-orange-100/70">{item.checkPointKo}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ) : (
         <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs leading-6 text-white/50">
           {emptyMessage}
         </p>
       )}
+    </div>
+  );
+}
+
+function formatDetectedBasis(evidenceKo: string): string {
+  const cleaned = evidenceKo
+    .replace(/\s*기준입니다\.?$/, "")
+    .replace(/\s*기준으로\s+.*$/, "")
+    .replace(/^[^:：]*점검했습니다\.?\s*/, "")
+    .trim();
+
+  if (!cleaned) return "";
+  if (cleaned.startsWith("기준:")) return cleaned;
+  return `기준: ${cleaned}`;
+}
+
+function formatDetectedCheck(checkPointKo: string): string {
+  const cleaned = checkPointKo
+    .replace(/^위험 확정이 아니라 관찰 단계입니다\.?\s*/i, "")
+    .replace(/확인해야 합니다\.?$/, "확인")
+    .replace(/점검해야 합니다\.?$/, "점검")
+    .replace(/점검합니다\.?$/, "점검")
+    .trim();
+
+  if (!cleaned) return "";
+  if (cleaned.startsWith("확인:")) return cleaned;
+  return `확인: ${cleaned}`;
+}
+
+function CompactExplanationRows({ explanation }: { explanation: CompactExplanation }) {
+  const rows = [
+    ["의미", explanation.meaning],
+    ["발생 이유", explanation.reason],
+    ["확인 조건", explanation.nextCheck],
+    ["주의할 점", explanation.caution],
+  ];
+
+  return (
+    <div className="mt-4 grid gap-2">
+      {rows.map(([label, value]) => (
+        <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+          <p className="text-[11px] font-semibold text-white/45">{label}</p>
+          <p className="mt-1 text-xs leading-5 text-white/68">{value}</p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1641,57 +1735,36 @@ function getActionPriorityColor(score: number) {
   return { bar: "bg-emerald-400", badge: "bg-emerald-300/15 text-emerald-100" };
 }
 
-function getQualitySignalLevelLabel(level: QualitySignalLevel | undefined): string {
-  if (level === "CRITICAL") return "구조 점검 필요";
-  if (level === "HIGH") return "단기 확인 우선";
-  if (level === "MEDIUM") return "회복 신뢰도 확인 필요";
-  if (level === "LOW") return "약한 관찰 단계";
-  return "보조 분석 확인";
+function getAuxiliaryScoreLabel(score: number): string {
+  if (score >= 80) return "매우 강한 주의";
+  if (score >= 60) return "강한 주의";
+  if (score >= 30) return "주의 관찰";
+  if (score >= 10) return "약한 관찰";
+  return "신호 낮음";
 }
 
-function getQualitySignalHelperText(title: string): string {
-  if (title === "신호 충돌 분석") {
-    return "이 점수는 종목 전체 위험도가 아니라, 긍정적으로 보이는 신호와 단기 약세 신호가 얼마나 충돌하는지를 보는 보조 지표입니다. 장기 위치나 거래량처럼 좋아 보이는 요소가 있더라도 VWAP 약세, 약한 종가, 추세 훼손 위험이 함께 나타나면 단기 해석은 더 신중해야 합니다.";
-  }
-
-  if (title === "가짜 신호 위험") {
-    return "이 점수는 하락을 예측하는 점수가 아니라, 장중 움직임이나 거래량이 있어도 실제 회복 신뢰도가 낮을 수 있는지를 점검하는 보조 지표입니다. VWAP 회복 실패, 약한 종가, 변동성 확대가 함께 나타나면 단순 반등을 진짜 회복으로 착각하지 않도록 확인이 필요합니다.";
-  }
-
-  return "이 점수는 종목 전체 위험도와 직접 비교하는 값이 아니라 단기 구조 점검을 돕는 보조 지표입니다.";
-}
-
-function getRiskGateSeverityLabel(severity: RiskGateSeverity | undefined): string {
-  if (severity === "NONE") return "게이트 없음";
-  if (severity === "WATCH") return "관찰";
-  if (severity === "CAUTION") return "주의";
-  if (severity === "HIGH_RISK") return "고위험";
-  if (severity === "BLOCK") return "강한 판단 제한";
-  return "게이트 확인";
-}
-
-function getRiskGateOverlayColor(score: number, severity: RiskGateSeverity | undefined) {
-  if (severity === "BLOCK") return { bar: "bg-red-800", badge: "bg-red-500/20 text-red-100" };
-  if (severity === "HIGH_RISK" || score >= 80) return { bar: "bg-red-700", badge: "bg-red-500/20 text-red-100" };
-  if (severity === "CAUTION" || score >= 55) return { bar: "bg-orange-500", badge: "bg-orange-300/15 text-orange-100" };
-  if (severity === "WATCH" || score >= 30) return { bar: "bg-yellow-300", badge: "bg-yellow-300/15 text-yellow-100" };
+function getAuxiliaryScoreColor(score: number) {
+  if (score >= 80) return { bar: "bg-red-700", badge: "bg-red-500/20 text-red-100" };
+  if (score >= 60) return { bar: "bg-orange-500", badge: "bg-orange-300/15 text-orange-100" };
+  if (score >= 30) return { bar: "bg-amber-300", badge: "bg-amber-300/15 text-amber-100" };
+  if (score >= 10) return { bar: "bg-yellow-300", badge: "bg-yellow-300/15 text-yellow-100" };
   return { bar: "bg-slate-400", badge: "bg-slate-300/15 text-slate-100" };
 }
 
 function getActionPriorityDescription(score: number): string {
   if (score >= 85) {
-    return "대응 우선순위 점수는 전체 위험도나 매력도가 아니라 확인 순서를 정하는 점수입니다. 이 구간은 데이터 품질 제한이나 여러 독립 위험이 겹칠 때 우선 점검 강도가 매우 높다는 뜻입니다.";
+    return "StockAI는 위험도와 확인 우선순위를 분리해 보여줍니다. 이 점수는 전체 위험도가 아니라 고객이 먼저 확인해야 할 신호의 순서입니다.";
   }
 
   if (score >= 70) {
-    return "현재 종목은 확인 우선 구간입니다. VWAP 위치, 종가 회복 여부, 변동성 확대 여부를 먼저 보되, 이 점수를 전체 위험도와 같은 의미로 해석하지 않아야 합니다.";
+    return "이 점수는 위험도 점수가 아니라 확인 우선순위입니다. 보조 위험 점수가 낮아도 변동성, VWAP, 종가 위치처럼 먼저 볼 조건이 있으면 높게 표시될 수 있습니다.";
   }
 
   if (score >= 55) {
-    return "현재 종목에는 확인할 조건이 일부 있습니다. 가격 위치와 리스크 신호가 같은 방향으로 개선되는지 차분히 점검해야 합니다.";
+    return "현재 종목에는 먼저 확인할 조건이 일부 있습니다. 위험 확정이 아니라 확인 순서를 정하는 보조 점수입니다.";
   }
 
-  return "현재 대응 우선순위는 과도하게 높은 구간은 아닙니다. 다만 가격 위치와 리스크 신호가 바뀌는지 계속 확인해야 합니다.";
+  return "현재 대응 우선순위는 낮은 편입니다. 기본 점수보다 다음 확인 조건이 새로 생기는지 관찰하면 됩니다.";
 }
 
 function getScoreDescription(scoreKey: string, score: number, type: "normal" | "risk"): string {
@@ -1853,11 +1926,40 @@ function getTopConfirmationCards(
     if (selected.length >= limit) return selected;
   }
 
-  return dedupeConfirmationCards(selected, (card) => getConfirmationSortScore(card, result));
+  const fallbackSelected = ensureDynamicConfirmationFallback(selected, result, limit);
+  return dedupeConfirmationCards(fallbackSelected, (card) => getConfirmationSortScore(card, result));
+}
+
+function ensureDynamicConfirmationFallback(
+  selected: IndicatorInsight[],
+  result: StockAnalysisViewResult,
+  limit: number,
+): IndicatorInsight[] {
+  if (selected.length > 0 || result.action.actionScore < 70) return selected;
+
+  const fallbacks = buildDynamicConfirmationFallbacks(result);
+  if (fallbacks.length === 0) return selected;
+
+  const cards = fallbacks.slice(0, limit).map((fallback) => createConfirmationInsightFromFallback(fallback, result));
+  return dedupeConfirmationCards(cards, (card) => getConfirmationSortScore(card, result));
+}
+
+function createConfirmationInsightFromFallback(
+  fallback: ReturnType<typeof buildDynamicConfirmationFallbacks>[number],
+  result: StockAnalysisViewResult,
+): IndicatorInsight {
+  const signalType = fallback.key;
+  const insight = createConfirmationInsight(signalType, result);
+  return {
+    ...insight,
+    title: fallback.title,
+    priority: fallback.priority,
+  };
 }
 
 function buildScoreBasedConfirmationCandidates(result: StockAnalysisViewResult): IndicatorInsight[] {
   const candidates: IndicatorInsight[] = [];
+  const needsPriorityConfirmation = result.action.actionScore >= 70;
 
   if (result.risk.trendCollapseRiskScore >= 80) {
     candidates.push(createConfirmationInsight("trend", result));
@@ -1880,6 +1982,22 @@ function buildScoreBasedConfirmationCandidates(result: StockAnalysisViewResult):
     (result.ohlc.closePositionScore <= 30 || result.vwap.vwapScore <= 40)
   ) {
     candidates.push(createConfirmationInsight("volume", result));
+  }
+
+  if (needsPriorityConfirmation) {
+    if (
+      result.vwap.vwapScore <= 65 ||
+      result.vwap.vwapRiskScore >= 32 ||
+      result.risk.vwapBreakdownRiskScore >= 35
+    ) {
+      candidates.push(createConfirmationInsight("vwap", result));
+    }
+    if (result.ohlc.closePositionScore <= 72) {
+      candidates.push(createConfirmationInsight("close", result));
+    }
+    if (result.risk.volatilityRiskScore >= 45 || result.ohlc.intradayRangePercent >= 5) {
+      candidates.push(createConfirmationInsight("volatility", result));
+    }
   }
 
   return candidates;
@@ -2208,6 +2326,19 @@ function buildOneLineInterpretation(result: StockAnalysisViewResult): string {
   return "현재 종목은 가격 위치, 거래량, VWAP, 리스크 신호가 혼재되어 다음 흐름 확인이 필요한 상태입니다.";
 }
 
+function buildCurrentStateInterpretation(result: StockAnalysisViewResult): string {
+  if (result.risk.volatilityRiskScore >= 65 && result.vwap.vwapScore >= 60) {
+    return "구조가 무너진 상태는 아니지만 장중 변동성이 커져 VWAP 유지와 종가 안정성을 함께 확인해야 하는 구간입니다.";
+  }
+  if (result.vwap.vwapRiskScore >= 60 || result.risk.vwapBreakdownRiskScore >= 60) {
+    return "원점수만 보면 중립에 가까워도 VWAP 회복 신뢰도를 먼저 확인해야 하는 구간입니다.";
+  }
+  if (result.risk.trendCollapseRiskScore >= 60) {
+    return "추세 유지력이 약해졌는지 확인해야 하며, 주요 기준선 회복 여부가 핵심입니다.";
+  }
+  return "가격, 거래량, VWAP, 리스크 신호를 함께 보면 단일 점수보다 다음 확인 조건이 더 중요한 구간입니다.";
+}
+
 function buildStateReasoning(result: StockAnalysisViewResult): string[] {
   const reasons: string[] = [];
 
@@ -2409,13 +2540,44 @@ function formatDataBasis(result: StockAnalysisViewResult, freshness?: StockDataF
   return formatDateTime(result.normalized?.asOf);
 }
 
-function getDataModeNotice(freshness: StockDataFreshness | undefined, warning: string): string {
+function getDataModeNotice(
+  freshness: StockDataFreshness | undefined,
+  warning: string,
+  hasPrimaryDataCaution = false,
+): string {
   if (warning) return warning;
+  if (hasPrimaryDataCaution && freshness?.provider === "yahoo-finance") {
+    return "일봉(EOD) 데이터 기준으로 분석된 결과입니다.";
+  }
   if (freshness?.mode === "EOD") return "일봉 차트 데이터 기반 분석 결과입니다.";
   if (freshness?.mode === "INTRADAY") return "장중 현재가 기준 분석 결과입니다.";
   if (freshness?.mode === "FALLBACK") return "대체 데이터 기준 분석 결과입니다.";
 
   return "현재는 샘플 데이터 기반 분석 결과입니다. 실제 종목 데이터 연결은 다음 단계에서 적용됩니다.";
+}
+
+function getDataFreshnessNotice(
+  freshness: StockDataFreshness | undefined,
+  result: StockAnalysisViewResult,
+): string {
+  const diagnosticsNote = result.normalized?.metadata?.providerDiagnostics?.note || "";
+  const hasPreviousCloseEstimation = diagnosticsNote.includes("전일") || diagnosticsNote.includes("previous");
+
+  if (freshness?.provider === "yahoo-finance" && freshness.mode === "EOD") {
+    return hasPreviousCloseEstimation
+      ? "데이터 주의: Yahoo Finance 일봉 기준 분석이며 실시간 체결 데이터가 아닙니다. 일부 가격은 지연·조정될 수 있고, 전일 종가는 이전 유효 캔들 기준 추정값일 수 있습니다."
+      : "데이터 주의: Yahoo Finance 일봉 기준 분석이며 실시간 체결 데이터가 아닙니다. 일부 가격은 데이터 제공 환경에 따라 지연되거나 조정될 수 있습니다.";
+  }
+
+  if (freshness?.isRealtime === false) {
+    return "데이터 주의: 현재 분석은 실시간 체결 데이터가 아닙니다. 기준일과 데이터 모드를 확인한 뒤 해석해야 합니다.";
+  }
+
+  if (freshness?.mode === "INTRADAY") {
+    return "데이터 안내: 장중 데이터는 계속 변할 수 있으므로 최종 종가와 거래량 확정 후 해석이 달라질 수 있습니다.";
+  }
+
+  return "데이터 안내: StockAI는 데이터 기준과 실시간성 여부를 함께 표시해 분석 조건을 투명하게 확인할 수 있도록 합니다.";
 }
 
 function getDataModeLabel(mode: StockDataFreshness["mode"] | undefined): string {

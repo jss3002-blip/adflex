@@ -1,3 +1,8 @@
+import {
+  computeDynamicWatchSeverity,
+  scaleWatchScore,
+  type AuxiliaryCautionContext,
+} from "./auxiliarySeverity";
 import { clampScore, isFiniteNumber } from "./normalize";
 
 export type FalseSignalRiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
@@ -26,6 +31,9 @@ export type FalseSignalInput = {
   upperWickRatio?: number;
   lowerWickRatio?: number;
   vwapDistancePercent?: number;
+  actionCode?: string;
+  primaryState?: string;
+  actionPriorityScore?: number;
 };
 
 export type FalseSignalInsight = {
@@ -122,6 +130,11 @@ export function analyzeFalseSignalRisk(input: FalseSignalInput): FalseSignalResu
     });
   }
 
+  const dynamicRecoveryWatch = buildDynamicRecoveryReliabilityWatch(input, signals);
+  if (dynamicRecoveryWatch) {
+    signals.push(dynamicRecoveryWatch);
+  }
+
   const rawFalseSignalScore =
     signals.reduce((total, signal) => total + signal.penalty, 0) + getFalseSignalSeverityBooster(input);
   const falseSignalScore = calibrateFalseSignalScore(rawFalseSignalScore, input, signals);
@@ -182,6 +195,59 @@ function isRecoveryReliabilityWatch(input: FalseSignalInput): boolean {
   return hasVolatilityCaution && hasRecoveryRecheckCondition && isNotCollapsed;
 }
 
+function buildDynamicRecoveryReliabilityWatch(
+  input: FalseSignalInput,
+  existingSignals: FalseSignalInsight[],
+): FalseSignalInsight | null {
+  if (existingSignals.some((signal) => signal.type === "RECOVERY_RELIABILITY_WATCH")) {
+    return null;
+  }
+
+  if (safeNumber(input.finalScore, 50) < 38) return null;
+  if (hasExtremeFalseSignalCluster(input)) return null;
+
+  const severity = computeDynamicWatchSeverity(toFalseSignalCautionContext(input));
+  if (severity <= 0) return null;
+
+  const recoveryUncertainty =
+    safeNumber(input.vwapScore, 65) <= 68 ||
+    safeNumber(input.vwapRiskScore, 0) >= 30 ||
+    safeNumber(input.closePositionScore, 100) <= 72 ||
+    safeNumber(input.vwapBreakdownRisk, 0) >= 32;
+  if (!recoveryUncertainty) return null;
+
+  const penalty = scaleWatchScore(5, 32, severity, 40);
+
+  return {
+    type: "RECOVERY_RELIABILITY_WATCH",
+    riskLevel: penalty >= 28 ? "MEDIUM" : "LOW",
+    titleKo: "회복 신뢰도 관찰",
+    summaryKo:
+      "확정적인 가짜 신호는 아니지만, 지지·회복이 완전히 확인되지 않아 VWAP와 종가 위치를 함께 점검해야 합니다.",
+    evidenceKo: `VWAP 점수 ${formatScore(input.vwapScore)}점, VWAP 리스크 ${formatScore(input.vwapRiskScore)}점, VWAP 이탈 위험 ${formatScore(input.vwapBreakdownRisk)}점, 종가 위치 ${formatScore(input.closePositionScore)}점, 변동성 위험 ${formatScore(input.volatilityRisk)}점 기준입니다.`,
+    checkPointKo:
+      "VWAP 위 유지와 종가 위치 개선이 함께 나타나는지 확인해야 합니다.",
+    penalty,
+  };
+}
+
+function toFalseSignalCautionContext(input: FalseSignalInput): AuxiliaryCautionContext {
+  return {
+    finalScore: input.finalScore,
+    closePositionScore: input.closePositionScore,
+    vwapScore: input.vwapScore,
+    vwapRiskScore: input.vwapRiskScore,
+    vwapBreakdownRisk: input.vwapBreakdownRisk,
+    trendCollapseRisk: input.trendCollapseRisk,
+    volatilityRisk: input.volatilityRisk,
+    intradayRangePercent: input.intradayRangePercent,
+    upperWickRatio: input.upperWickRatio,
+    actionCode: input.actionCode,
+    primaryState: input.primaryState,
+    actionPriorityScore: input.actionPriorityScore,
+  };
+}
+
 function getFalseSignalRiskLevel(score: number): FalseSignalRiskLevel {
   if (score >= 80) return "CRITICAL";
   if (score >= 55) return "HIGH";
@@ -219,6 +285,12 @@ function calibrateFalseSignalScore(
 
   if (!hasExtremeFalseSignalCluster(input)) {
     score = Math.min(score, 66);
+  }
+
+  const recoveryWatchOnly =
+    signals.length > 0 && signals.every((signal) => signal.type === "RECOVERY_RELIABILITY_WATCH");
+  if (recoveryWatchOnly) {
+    score = Math.min(score, scaleWatchScore(6, 28, computeDynamicWatchSeverity(toFalseSignalCautionContext(input)), 34));
   }
 
   return clampScore(score);

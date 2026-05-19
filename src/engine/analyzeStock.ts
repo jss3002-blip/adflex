@@ -318,6 +318,9 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     dailyChangePercent: ohlc.previousCloseChangePercent,
     intradayRangePercent: ohlc.intradayRangePercent,
     vwapDistancePercent: vwap.vwapDistancePercent,
+    actionCode: action.actionCode,
+    primaryState: state.primaryState,
+    actionPriorityScore: action.actionScore,
   });
   const falseSignalAnalysis = analyzeFalseSignalRisk({
     finalScore,
@@ -335,6 +338,9 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     upperWickRatio: ohlc.upperWickRatio,
     lowerWickRatio: ohlc.lowerWickRatio,
     vwapDistancePercent: vwap.vwapDistancePercent,
+    actionCode: action.actionCode,
+    primaryState: state.primaryState,
+    actionPriorityScore: action.actionScore,
   });
   const riskGateOverlay = analyzeRiskGateOverlay({
     finalScore,
@@ -361,6 +367,9 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     stockType: normalized.stockType,
     dataMode: normalized.analysisMode,
     isRealtime: normalized.metadata?.isRealtime,
+    actionCode: action.actionCode,
+    primaryState: state.primaryState,
+    actionPriorityScore: action.actionScore,
   });
   const customerFacingAction = {
     ...action,

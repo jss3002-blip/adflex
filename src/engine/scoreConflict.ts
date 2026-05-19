@@ -1,3 +1,9 @@
+import {
+  computeDynamicWatchSeverity,
+  scaleWatchScore,
+  type AuxiliaryCautionContext,
+  valueOr,
+} from "./auxiliarySeverity";
 import { clampScore, isFiniteNumber } from "./normalize";
 
 export type ConflictSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
@@ -27,6 +33,9 @@ export type SignalConflictInput = {
   dailyChangePercent?: number;
   intradayRangePercent?: number;
   vwapDistancePercent?: number;
+  actionCode?: string;
+  primaryState?: string;
+  actionPriorityScore?: number;
 };
 
 export type SignalConflictInsight = {
@@ -123,6 +132,11 @@ export function analyzeSignalConflicts(input: SignalConflictInput): SignalConfli
     });
   }
 
+  const dynamicWatch = buildDynamicConflictWatch(input, conflicts);
+  if (dynamicWatch) {
+    conflicts.push(dynamicWatch);
+  }
+
   const rawConflictScore = conflicts.reduce((total, conflict) => total + conflict.penalty, 0) + getConflictSeverityBooster(input);
   const conflictScore = calibrateConflictScore(rawConflictScore, input, conflicts);
   const severity = getConflictSeverity(conflictScore);
@@ -199,6 +213,58 @@ function getConflictSeverityBooster(input: SignalConflictInput): number {
   return Math.min(booster, 5);
 }
 
+function buildDynamicConflictWatch(
+  input: SignalConflictInput,
+  existingConflicts: SignalConflictInsight[],
+): SignalConflictInsight | null {
+  if (existingConflicts.some((conflict) => conflict.type === "MILD_VOLATILITY_INTERPRETATION_WATCH")) {
+    return null;
+  }
+
+  const severity = computeDynamicWatchSeverity(toCautionContext(input));
+  if (severity <= 0) return null;
+
+  const penalty = scaleWatchScore(6, 34, severity, 42);
+  const evidenceParts = [
+    `종합 점수 ${formatScore(input.totalScore)}점`,
+    `52주 위치 점수 ${formatScore(input.fiftyTwoWeekPositionScore)}점`,
+    `VWAP 점수 ${formatScore(input.vwapScore)}점`,
+    `VWAP 리스크 ${formatScore(input.vwapRiskScore)}점`,
+    `종가 위치 ${formatScore(input.closePositionScore)}점`,
+    `변동성 위험 ${formatScore(input.volatilityRisk)}점`,
+  ];
+
+  return {
+    type: "MILD_VOLATILITY_INTERPRETATION_WATCH",
+    severity: penalty >= 30 ? "MEDIUM" : "LOW",
+    titleKo: "구조 대비 단기 확인 신호 불일치 관찰",
+    summaryKo:
+      "긍정적으로 보이는 구조와 VWAP·종가·변동성 확인 조건이 동시에 남아 있어, 낮은 강도의 해석 불일치를 점검해야 합니다.",
+    evidenceKo: `${evidenceParts.join(", ")} 기준입니다.`,
+    checkPointKo:
+      "다음 거래일 변동폭 완화와 VWAP·종가 위치가 같은 방향으로 유지되는지 확인해야 합니다.",
+    penalty,
+  };
+}
+
+function toCautionContext(input: SignalConflictInput): AuxiliaryCautionContext {
+  return {
+    totalScore: input.totalScore,
+    finalScore: input.totalScore,
+    closePositionScore: input.closePositionScore,
+    fiftyTwoWeekPositionScore: input.fiftyTwoWeekPositionScore,
+    vwapScore: input.vwapScore,
+    vwapRiskScore: input.vwapRiskScore,
+    vwapBreakdownRisk: input.vwapBreakdownRisk,
+    trendCollapseRisk: input.trendCollapseRisk,
+    volatilityRisk: input.volatilityRisk,
+    intradayRangePercent: input.intradayRangePercent,
+    actionCode: input.actionCode,
+    primaryState: input.primaryState,
+    actionPriorityScore: input.actionPriorityScore,
+  };
+}
+
 function calibrateConflictScore(
   rawScore: number,
   input: SignalConflictInput,
@@ -216,6 +282,13 @@ function calibrateConflictScore(
 
   if (!hasExtremeConflictCluster(input)) {
     score = Math.min(score, 68);
+  }
+
+  const dynamicOnly =
+    conflicts.length > 0 &&
+    conflicts.every((conflict) => conflict.type === "MILD_VOLATILITY_INTERPRETATION_WATCH");
+  if (dynamicOnly) {
+    score = Math.min(score, scaleWatchScore(8, 30, computeDynamicWatchSeverity(toCautionContext(input)), 36));
   }
 
   return clampScore(score);
@@ -256,11 +329,6 @@ function getAuxiliarySeverityLabel(severity: ConflictSeverity): string {
   if (severity === "HIGH") return "높은 편입니다";
   if (severity === "MEDIUM") return "보통 수준입니다";
   return "낮은 강도의 관찰 신호입니다";
-}
-
-function valueOr(value: number | undefined, fallback: number): number {
-  if (isFiniteNumber(value)) return value;
-  return fallback;
 }
 
 function formatScore(value: number | undefined): string {

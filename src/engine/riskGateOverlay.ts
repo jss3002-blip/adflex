@@ -1,3 +1,12 @@
+import {
+  computeDynamicWatchSeverity,
+  isMonitoringActionCode,
+  isMonitoringPrimaryState,
+  scaleWatchScore,
+  type AuxiliaryCautionContext,
+  valueOr,
+} from "./auxiliarySeverity";
+
 export type RiskGateSeverity = "NONE" | "WATCH" | "CAUTION" | "HIGH_RISK" | "BLOCK";
 
 export type RiskGateType =
@@ -6,6 +15,7 @@ export type RiskGateType =
   | "TREND_COLLAPSE_GATE"
   | "VOLATILITY_WEAK_CLOSE_GATE"
   | "VOLATILITY_WATCH_GATE"
+  | "SUPPORT_MONITORING_WATCH_GATE"
   | "VOLUME_WITHOUT_RECOVERY_GATE"
   | "AUXILIARY_RISK_GATE"
   | "DATA_QUALITY_GATE"
@@ -47,6 +57,10 @@ export type RiskGateInput = {
   stockType?: string;
   dataMode?: string;
   isRealtime?: boolean;
+
+  actionCode?: string;
+  primaryState?: string;
+  actionPriorityScore?: number;
 };
 
 export type RiskGateInsight = {
@@ -282,6 +296,11 @@ export function analyzeRiskGateOverlay(input: RiskGateInput): RiskGateOverlayRes
     });
   }
 
+  const supportMonitoringGate = buildSupportMonitoringWatchGate(input, gates);
+  if (supportMonitoringGate) {
+    gates.push(supportMonitoringGate);
+  }
+
   if (hasNumber(input.confidenceScore) && input.confidenceScore < 50) {
     gates.push({
       type: "CONFIDENCE_LIMIT_GATE",
@@ -340,6 +359,67 @@ export function getRiskGateSeverityLabelKo(severity: RiskGateSeverity): string {
 export function clampOverlayScore(value: number): number {
   if (!isFiniteNumber(value)) return 0;
   return Math.min(100, Math.max(0, value));
+}
+
+function buildSupportMonitoringWatchGate(
+  input: RiskGateInput,
+  existingGates: RiskGateInsight[],
+): RiskGateInsight | null {
+  if (existingGates.some((gate) => gate.type === "SUPPORT_MONITORING_WATCH_GATE")) {
+    return null;
+  }
+
+  const needsMonitoring =
+    isMonitoringActionCode(input.actionCode) ||
+    isMonitoringPrimaryState(input.primaryState) ||
+    valueOr(input.actionPriorityScore, 0) >= 70;
+  if (!needsMonitoring) return null;
+
+  const severity = computeDynamicWatchSeverity(toRiskGateCautionContext(input));
+  if (severity <= 0) return null;
+
+  const hasSevereStructuralGate = existingGates.some((gate) =>
+    ["VWAP_BREAKDOWN_GATE", "WEAK_CLOSE_GATE", "TREND_COLLAPSE_GATE", "STATE_COLLAPSE_CLUSTER_GATE"].includes(
+      gate.type,
+    ),
+  );
+  if (hasSevereStructuralGate && severity < 0.45) return null;
+
+  const weight = scaleWatchScore(9, 20, severity, 30);
+  const evidenceKo = `VWAP 점수 ${formatScore(input.vwapScore)}, VWAP 리스크 ${formatScore(input.vwapRiskScore)}, 종가 위치 ${formatScore(input.closePositionScore)}, 변동성 위험 ${formatScore(input.volatilityRisk)}, 대응 우선순위 ${formatScore(input.actionPriorityScore)}점 기준으로 모니터링 필요성을 점검했습니다.`;
+
+  return {
+    type: "SUPPORT_MONITORING_WATCH_GATE",
+    severity: "WATCH",
+    titleKo: "VWAP 지지 확인 모니터링 게이트",
+    summaryKo:
+      "상태·대응 라벨이 지지·회복 확인을 요구하고, VWAP·종가·변동성 조건이 완전히 안정적이지 않아 원점수 해석을 낮은 강도로 제한합니다.",
+    evidenceKo,
+    actionKo:
+      "고객은 이 신호를 방향 확정이 아니라 VWAP·종가·변동폭 확인 조건으로 봐야 합니다. 다음 흐름에서 지지가 유지되는지 점검하는 것이 핵심입니다.",
+    scoreImpactNoteKo:
+      "현재 finalScore와 riskScore는 변경하지 않습니다. 이 게이트는 보조 해석에서 확인 우선 조건을 표시합니다.",
+    backtestLabelHint: "support_monitoring_watch_label",
+    weight,
+  };
+}
+
+function toRiskGateCautionContext(input: RiskGateInput): AuxiliaryCautionContext {
+  return {
+    finalScore: input.finalScore,
+    closePositionScore: input.closePositionScore,
+    fiftyTwoWeekPositionScore: input.fiftyTwoWeekPositionScore,
+    vwapScore: input.vwapScore,
+    vwapRiskScore: input.vwapRiskScore,
+    vwapBreakdownRisk: input.vwapBreakdownRisk,
+    trendCollapseRisk: input.trendCollapseRisk,
+    volatilityRisk: input.volatilityRisk,
+    intradayRangePercent: input.intradayRangePercent,
+    upperWickRatio: input.upperWickRatio,
+    actionCode: input.actionCode,
+    primaryState: input.primaryState,
+    actionPriorityScore: input.actionPriorityScore,
+  };
 }
 
 function calculateOverlayScore(gates: RiskGateInsight[]): number {
