@@ -347,6 +347,7 @@ function getGradeExplanation(grade: string | undefined): string {
 function formatSummaryForDisplay(summary: string | undefined): string {
   if (!summary) return "";
 
+  const normalizedSummary = normalizeKoreanScoreUnit(summary);
   const replacements = {
     ...gradeLabels,
     ...stateLabels,
@@ -356,7 +357,7 @@ function formatSummaryForDisplay(summary: string | undefined): string {
 
   return Object.entries(replacements).reduce((formatted, [code, label]) => {
     return formatted.split(code).join(label);
-  }, summary);
+  }, normalizedSummary);
 }
 
 export default function Home() {
@@ -912,13 +913,7 @@ function AnalysisResultCard({
 
       <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4">
         <p className="text-sm font-semibold text-amber-100">핵심 확인 요약</p>
-        {result.warnings.length > 0 ? (
-          <p className="mt-3 text-xs leading-6 text-amber-50/75">
-            {topConfirmationCards.map((card) => card.title).join(" · ")} 조건을 우선 확인하세요.
-          </p>
-        ) : (
-          <p className="mt-3 text-xs leading-6 text-amber-50/65">현재 표시된 주요 경고는 없습니다.</p>
-        )}
+        <p className="mt-3 text-xs leading-6 text-amber-50/75">{buildKeyConfirmationSummary(topConfirmationCards)}</p>
       </div>
 
       <IndicatorSections
@@ -1358,8 +1353,12 @@ function QualitySignalPanel({
   );
 }
 
+function normalizeKoreanScoreUnit(text: string): string {
+  return text.replace(/점점+/g, "점");
+}
+
 function formatDetectedBasis(evidenceKo: string): string {
-  const cleaned = evidenceKo
+  const cleaned = normalizeKoreanScoreUnit(evidenceKo)
     .replace(/\s*기준입니다\.?$/, "")
     .replace(/\s*기준으로\s+.*$/, "")
     .replace(/^[^:：]*점검했습니다\.?\s*/, "")
@@ -1371,7 +1370,7 @@ function formatDetectedBasis(evidenceKo: string): string {
 }
 
 function formatDetectedCheck(checkPointKo: string): string {
-  const cleaned = checkPointKo
+  const cleaned = normalizeKoreanScoreUnit(checkPointKo)
     .replace(/^위험 확정이 아니라 관찰 단계입니다\.?\s*/i, "")
     .replace(/확인해야 합니다\.?$/, "확인")
     .replace(/점검해야 합니다\.?$/, "점검")
@@ -2003,6 +2002,67 @@ function buildScoreBasedConfirmationCandidates(result: StockAnalysisViewResult):
   return candidates;
 }
 
+function buildKeyConfirmationSummary(cards: IndicatorInsight[]): string {
+  if (cards.length === 0) {
+    return "현재 표시된 주요 경고는 없습니다.";
+  }
+
+  const themes: string[] = [];
+  const groups = new Set(cards.map((card) => getConfirmationGroup(card.categoryKey)));
+
+  if (groups.has("close")) themes.push("종가 위치");
+  if (groups.has("vwap")) themes.push("VWAP 회복 여부");
+  if (groups.has("volatility")) themes.push("변동성 완화");
+  if (groups.has("volume")) themes.push("거래량 유지");
+  if (groups.has("trend")) themes.push("추세 유지력");
+
+  if (themes.length >= 2) {
+    return `${themes.join(", ")} 조건을 우선 확인하세요.`;
+  }
+
+  if (themes.length === 1) {
+    return `${themes[0]} 조건을 우선 확인하세요.`;
+  }
+
+  return `${cards.map((card) => card.title).join(", ")} 조건을 우선 확인하세요.`;
+}
+
+function getVwapPositionLabel(result: StockAnalysisViewResult): string {
+  if (!result.vwap.isAboveVwap || result.vwap.vwapDistancePercent < 0) {
+    return "VWAP 아래";
+  }
+  if (result.vwap.isNearVwap) {
+    return "VWAP 위·근접";
+  }
+  return "VWAP 위";
+}
+
+function getVwapPositionMeaning(result: StockAnalysisViewResult): string {
+  const distanceText = formatPercent(result.vwap.vwapDistancePercent);
+
+  if (!result.vwap.isAboveVwap || result.vwap.vwapDistancePercent < 0) {
+    return `가격이 평균 거래 단가(VWAP) 아래에 있어 단기 회복·지지 여부 확인이 필요합니다. 현재 VWAP 이격률은 ${distanceText}입니다.`;
+  }
+
+  if (result.vwap.isNearVwap) {
+    return `가격이 VWAP 위에 있지만 이격이 작아, 평균 거래 단가 위에서 지지가 유지되는지 확인해야 합니다. 현재 VWAP 이격률은 ${distanceText}입니다.`;
+  }
+
+  return `가격이 VWAP 위에서 유지되고 있어 단기 지지는 유지 중입니다. 다만 종가·변동성 조건과 함께 지속 여부를 확인해야 합니다. 현재 VWAP 이격률은 ${distanceText}입니다.`;
+}
+
+function getVwapPositionNextCheck(result: StockAnalysisViewResult): string {
+  if (!result.vwap.isAboveVwap || result.vwap.vwapDistancePercent < 0) {
+    return "다음 거래일 가격이 VWAP 위로 회복한 뒤 종가까지 유지되는지 확인해야 합니다.";
+  }
+
+  if (result.vwap.isNearVwap) {
+    return "다음 거래일 VWAP 위 유지와 종가 위치 개선이 함께 나타나는지 확인해야 합니다.";
+  }
+
+  return "다음 거래일에도 VWAP 위에서 지지가 유지되는지, 종가가 약해지지 않는지 확인해야 합니다.";
+}
+
 function createConfirmationInsight(signalType: SignalType, result: StockAnalysisViewResult): IndicatorInsight {
   const title = getIndicatorTitle(signalType, "confirmation", result);
 
@@ -2024,9 +2084,9 @@ function createConfirmationInsight(signalType: SignalType, result: StockAnalysis
       badge: "확인 필요",
       categoryKey: signalType,
       priority: getConfirmationPriority(signalType, title, result),
-      meaning: `가격이 평균 거래 단가 아래에 있어 단기 신뢰도 확인이 필요합니다. 현재 VWAP 이격률은 ${formatPercent(result.vwap.vwapDistancePercent)}입니다.`,
-      evidence: `VWAP 점수 ${formatScore(result.vwap.vwapScore)}점, VWAP 리스크 점수 ${formatScore(result.vwap.vwapRiskScore)}점, VWAP 이탈 위험 ${formatScore(result.risk.vwapBreakdownRiskScore)}점 기준입니다.`,
-      nextCheck: "다음 거래일 가격이 VWAP 위로 회복한 뒤 종가까지 유지되는지 확인해야 합니다.",
+      meaning: getVwapPositionMeaning(result),
+      evidence: `VWAP 점수 ${formatScore(result.vwap.vwapScore)}점, VWAP 리스크 점수 ${formatScore(result.vwap.vwapRiskScore)}점, VWAP 이탈 위험 ${formatScore(result.risk.vwapBreakdownRiskScore)}점, VWAP 위치 ${getVwapPositionLabel(result)} 기준입니다.`,
+      nextCheck: getVwapPositionNextCheck(result),
     };
   }
 
@@ -2156,9 +2216,9 @@ function getIndicatorInsight(
       badge,
       categoryKey: signalType,
       priority,
-      meaning: `가격이 평균 거래 단가 아래에 있어 단기 반등 신뢰도가 낮아질 수 있는 상태입니다. 현재 VWAP 이격률은 ${formatPercent(result.vwap.vwapDistancePercent)}입니다.`,
-      evidence: `VWAP 점수 ${formatScore(result.vwap.vwapScore)}점, VWAP 리스크 점수 ${formatScore(result.vwap.vwapRiskScore)}점 기준으로 평균 단가 회복 여부가 핵심 확인 기준입니다.`,
-      nextCheck: "다음 거래일 가격이 VWAP 위로 회복한 뒤 종가까지 유지되는지 확인해야 합니다.",
+      meaning: getVwapPositionMeaning(result),
+      evidence: `VWAP 점수 ${formatScore(result.vwap.vwapScore)}점, VWAP 리스크 점수 ${formatScore(result.vwap.vwapRiskScore)}점, VWAP 위치 ${getVwapPositionLabel(result)} 기준으로 평균 단가 유지·회복 여부가 핵심 확인 기준입니다.`,
+      nextCheck: getVwapPositionNextCheck(result),
     };
   }
 
