@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { buildDynamicConfirmationFallbacks } from "@/src/engine/confirmationFallback";
 import { dedupeConfirmationCards } from "@/src/ui/dedupeConfirmationCards";
+import { NextTradingDayGuidanceSection } from "@/src/ui/nextTradingDayGuidance";
 
 type IconName =
   | "activity"
@@ -857,6 +858,8 @@ function AnalysisResultCard({
       </div>
 
       <StockAiInterpretationPhilosophy />
+
+      <NextTradingDayGuidanceSection result={result} topConfirmationCards={topConfirmationCards} />
 
       <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
