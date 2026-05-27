@@ -110,6 +110,14 @@ type StockAnalysisViewResult = {
     };
     metadata?: {
       providerDiagnostics?: YahooProviderDiagnostics;
+      dataSource?: string;
+      week52IsLimitedHistory?: boolean;
+      periodHighLowDays?: number;
+      kisCandleCount?: number;
+      week52HistoryLabel?: string;
+      vwapBasisLabel?: string;
+      latestCandleDate?: string;
+      firstCandleDate?: string;
     };
   };
   ohlc: {
@@ -302,14 +310,15 @@ type StockAiSixWForecast = {
 };
 
 type ProviderPriority = "PRIMARY" | "SECONDARY" | "FALLBACK";
-type ProviderStatus = "AVAILABLE" | "UNAVAILABLE" | "FALLBACK_USED" | "ERROR";
+type ProviderStatus = "OK" | "AVAILABLE" | "UNAVAILABLE" | "FALLBACK_USED" | "ERROR";
 type DataMode =
   | "REALTIME"
   | "DELAYED"
   | "EOD"
   | "EOD_FALLBACK"
   | "FALLBACK"
-  | "SAMPLE";
+  | "SAMPLE"
+  | "KIS_REST";
 type ReliabilityLevel = "HIGH" | "MEDIUM" | "LOW" | "LIMITED";
 
 type MarketDataQualityView = {
@@ -346,6 +355,8 @@ type StockAnalysisApiResponse = {
   marketData?: MarketDataView;
   chartSeries?: ChartSeriesBundle;
   diagnostics?: unknown;
+  dataLineage?: DataLineageView;
+  sourceConsistency?: { ok: boolean; warnings: string[] };
   warning?: string;
   data?: StockAnalysisViewResult;
   aiSummary?: StockAiSummary | null;
@@ -353,11 +364,28 @@ type StockAnalysisApiResponse = {
   detail?: string;
 };
 
+type DataLineageView = {
+  analysisInputSource: string;
+  chartSeriesSource: string;
+  marketDataSource: string;
+  aiSummaryInputSource: string;
+  vwapBasis: string;
+  periodHighLowDays: number;
+  week52IsLimitedHistory: boolean;
+  week52HistoryLabel: string;
+  candleCount: number;
+  latestCandleDate: string;
+  provider: string;
+  dataMode: string;
+};
+
 type AnalysisMeta = {
   freshness?: StockDataFreshness;
   warning: string;
   marketData?: MarketDataView;
   chartSeries?: ChartSeriesBundle;
+  dataLineage?: DataLineageView;
+  sourceConsistency?: { ok: boolean; warnings: string[] };
 };
 
 type StockDataFreshness = {
@@ -545,6 +573,8 @@ export default function Home() {
         warning: data.warning || "",
         marketData: data.marketData,
         chartSeries: data.chartSeries,
+        dataLineage: data.dataLineage,
+        sourceConsistency: data.sourceConsistency,
       });
     } catch (error) {
       setAnalysisError(error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.");
@@ -1482,6 +1512,7 @@ function getProviderPriorityLabel(priority: ProviderPriority | undefined): strin
 }
 
 function getProviderStatusLabel(status: ProviderStatus | undefined): string {
+  if (status === "OK") return "OK (정상)";
   if (status === "AVAILABLE") return "AVAILABLE";
   if (status === "UNAVAILABLE") return "UNAVAILABLE";
   if (status === "FALLBACK_USED") return "FALLBACK_USED";
@@ -1493,6 +1524,7 @@ function getExtendedDataModeLabel(
   dataMode: DataMode | undefined,
   legacyMode: StockDataFreshness["mode"] | undefined,
 ): string {
+  if (dataMode === "KIS_REST") return "KIS_REST (KIS REST 시세/일봉)";
   if (dataMode === "EOD_FALLBACK") return "EOD_FALLBACK (Yahoo 일봉 대체)";
   if (dataMode === "FALLBACK") return "FALLBACK";
   if (dataMode === "REALTIME") return "REALTIME";
@@ -1500,6 +1532,45 @@ function getExtendedDataModeLabel(
   if (dataMode === "EOD") return "EOD";
   if (dataMode === "SAMPLE") return "SAMPLE";
   return getDataModeLabel(legacyMode);
+}
+
+function buildChartDataNotice(params: {
+  freshness?: StockDataFreshness;
+  marketData?: MarketDataView;
+  warning?: string;
+}): string | undefined {
+  const provider = params.marketData?.provider ?? params.freshness?.provider;
+  const dataMode = params.marketData?.dataMode ?? params.freshness?.dataMode;
+  const sourceLabel = params.freshness?.sourceLabel ?? "";
+
+  if (provider === "sample" || dataMode === "SAMPLE") {
+    return (
+      params.warning ||
+      "샘플 데이터 기준 차트입니다. 실제 시세가 아니며 분석 결과는 참고용입니다."
+    );
+  }
+
+  if (
+    provider === "kis-developers" ||
+    dataMode === "KIS_REST" ||
+    sourceLabel.includes("KIS Developers")
+  ) {
+    return "KIS Developers 기준 일봉 차트 데이터입니다. REST 시세/일봉 응답 기준이며, 장중 실시간 체결과 차이가 있을 수 있습니다.";
+  }
+
+  if (
+    provider === "yahoo-finance" ||
+    dataMode === "EOD_FALLBACK" ||
+    params.freshness?.providerPriority === "FALLBACK"
+  ) {
+    return (
+      params.warning ||
+      params.marketData?.dataQuality.limitationMessage ||
+      "Yahoo Finance 기준 차트 데이터이며, 거래소 및 데이터 제공 환경에 따라 지연되거나 조정된 값이 포함될 수 있습니다."
+    );
+  }
+
+  return params.freshness?.cautionMessage;
 }
 
 function getReliabilityLevelLabel(level: ReliabilityLevel): string {
@@ -1543,10 +1614,17 @@ function AnalysisResultCard({
 
   const marketData = meta.marketData;
   const chartSeries = meta.chartSeries;
+  const chartNotice = buildChartDataNotice({
+    freshness: meta.freshness,
+    marketData,
+    warning: meta.warning,
+  });
   const fallbackChartMessage =
-    meta.warning ||
-    marketData?.dataQuality.limitationMessage ||
-    meta.freshness?.cautionMessage;
+    marketData?.providerPriority === "FALLBACK" || meta.freshness?.provider === "sample"
+      ? meta.warning ||
+        marketData?.dataQuality.limitationMessage ||
+        meta.freshness?.cautionMessage
+      : undefined;
 
   return (
     <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_90px_-64px_rgba(34,211,238,0.9)] backdrop-blur-2xl">
@@ -1566,17 +1644,27 @@ function AnalysisResultCard({
         <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
           <p className="text-sm font-semibold text-cyan-200/85">가격·거래량 차트</p>
           <p className="mt-1 text-[11px] leading-5 text-white/50">
-            정규화된 캔들 데이터 기준 (VWAP·전일 종가 참고선 포함)
+            {marketData?.provider === "kis-developers" || meta.freshness?.dataMode === "KIS_REST"
+              ? "KIS Developers 일봉 기준 (일봉 VWAP 추정·전일 종가 참고선 포함)"
+              : "정규화된 캔들 데이터 기준 (VWAP·전일 종가 참고선 포함)"}
           </p>
           <div className="mt-3">
             <StockChart
               series={chartSeries}
               providerPriority={marketData?.providerPriority ?? meta.freshness?.providerPriority}
+              providerName={marketData?.provider ?? meta.freshness?.provider}
+              dataMode={marketData?.dataMode ?? meta.freshness?.dataMode}
               reliabilityLevel={
                 marketData?.dataQuality.reliabilityLevel ?? meta.freshness?.reliabilityLevel
               }
               priceScaleSuspicious={marketData?.dataQuality.priceScaleSuspicious}
+              chartNotice={chartNotice}
               fallbackMessage={fallbackChartMessage}
+              vwapLineTitle={
+                meta.dataLineage?.vwapBasis
+                  ? meta.dataLineage.vwapBasis.replace("추정 VWAP", "VWAP(추정)")
+                  : undefined
+              }
             />
           </div>
         </div>
@@ -1657,6 +1745,8 @@ function AnalysisResultCard({
         targetStockName={targetStockName}
         sourceLabel={sourceLabel}
         freshness={meta.freshness}
+        dataLineage={meta.dataLineage}
+        sourceConsistency={meta.sourceConsistency}
       />
     </div>
   );
@@ -1699,18 +1789,26 @@ function DetailedAnalysisSection({
   targetStockName,
   sourceLabel,
   freshness,
+  dataLineage,
+  sourceConsistency,
 }: {
   result: StockAnalysisViewResult;
   targetStockName: string;
   sourceLabel: string;
   freshness?: StockDataFreshness;
+  dataLineage?: DataLineageView;
+  sourceConsistency?: { ok: boolean; warnings: string[] };
 }) {
   const confirmedTicker = result.normalized?.ticker || "";
   const confirmedName = result.normalized?.name || "확인 대기";
   const diagnostics = result.normalized?.metadata?.providerDiagnostics;
+  const week52Limited = Boolean(result.normalized?.metadata?.week52IsLimitedHistory);
+  const week52ScoreTitle = week52Limited
+    ? `기간 내 위치 점수 (${result.normalized?.metadata?.periodHighLowDays ?? "?"}일)`
+    : "52주 위치 점수";
   const detailedScores = [
     { key: "closePositionScore", title: "종가 위치 점수", score: result.ohlc.closePositionScore, type: "normal" as const },
-    { key: "week52PositionScore", title: "52주 위치 점수", score: result.ohlc.week52PositionScore, type: "normal" as const },
+    { key: "week52PositionScore", title: week52ScoreTitle, score: result.ohlc.week52PositionScore, type: "normal" as const },
     { key: "volumeScore", title: "거래량 점수", score: result.volume.volumeScore, type: "normal" as const },
     { key: "vwapScore", title: "VWAP 점수", score: result.vwap.vwapScore, type: "normal" as const },
     { key: "volumeRiskScore", title: "거래량 리스크 점수", score: result.volume.volumeRiskScore, type: "risk" as const },
@@ -1771,7 +1869,7 @@ function DetailedAnalysisSection({
           title="가격 구조"
           items={[
             ["종가 위치 점수", formatScore(result.ohlc.closePositionScore)],
-            ["52주 위치 점수", formatScore(result.ohlc.week52PositionScore)],
+            [week52ScoreTitle, formatScore(result.ohlc.week52PositionScore)],
             ["전일 대비 등락률", formatPercent(result.ohlc.previousCloseChangePercent)],
             ["장중 변동폭", formatPercent(result.ohlc.intradayRangePercent)],
             ["윗꼬리 비율", formatPercent(result.ohlc.upperWickRatio)],
@@ -1824,8 +1922,37 @@ function DetailedAnalysisSection({
             ["분석 모드", result.normalized?.analysisMode || "-"],
             ["현재가/종가", formatNumber(result.normalized?.currentPrice || result.normalized?.close)],
             ["거래량", formatNumber(result.normalized?.volume)],
+            ...(result.normalized?.metadata?.week52HistoryLabel
+              ? [["고저 기준", result.normalized.metadata.week52HistoryLabel] as [string, string]]
+              : []),
+            ...(result.normalized?.metadata?.vwapBasisLabel
+              ? [["VWAP 기준", result.normalized.metadata.vwapBasisLabel] as [string, string]]
+              : []),
           ]}
         />
+        {dataLineage ? (
+          <DetailCard
+            title="KIS 데이터 계보"
+            muted
+            items={[
+              ["분석 입력", dataLineage.analysisInputSource],
+              ["차트", dataLineage.chartSeriesSource],
+              ["시장 데이터", dataLineage.marketDataSource],
+              ["AI 요약 입력", dataLineage.aiSummaryInputSource],
+              ["캔들 수", formatNumber(dataLineage.candleCount)],
+              ["최신 캔들일", dataLineage.latestCandleDate],
+              ["VWAP", dataLineage.vwapBasis],
+              ["고저 구간", dataLineage.week52HistoryLabel],
+            ]}
+          />
+        ) : null}
+        {sourceConsistency && !sourceConsistency.ok ? (
+          <DetailCard
+            title="데이터 일관성 경고"
+            muted
+            items={sourceConsistency.warnings.map((w, i) => [`경고 ${i + 1}`, w])}
+          />
+        ) : null}
         {/* TODO(next): Yahoo Finance 원본 가격 스케일 검증 — 005930.KS 등에서 UI 가격(예: 307,000)과 provider 단위 일치 여부 별도 조사 */}
         {diagnostics ? (
           <DetailCard

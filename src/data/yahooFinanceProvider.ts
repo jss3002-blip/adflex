@@ -235,9 +235,9 @@ function buildProviderDiagnostics(params: {
     // TODO: Replace with KIS/KRX/Naver cross-source validation when primary providers connect.
     if (params.stock.code === "005930") {
       const price = finiteOr(params.result.meta?.regularMarketPrice, latest.close);
-      if (price < 30_000 || price > 150_000) {
+      if (price < 10_000 || price > 1_000_000) {
         notes.push(
-          `삼성전자 가격 스케일 의심: ${price.toLocaleString("ko-KR")}원 (개발용 기대 범위 30,000~150,000원).`,
+          `삼성전자 가격 스케일 의심: ${price.toLocaleString("ko-KR")}원 (비정상 스케일 가능성, 참고 범위 10,000~1,000,000원).`,
         );
       }
     }

@@ -63,7 +63,10 @@ export async function POST(req: Request) {
     try {
       const providerResult = await getStockDataForAnalysis({ stockName });
       const result = analyzeStock(providerResult.input);
-      const aiSummary = await resolveAiSummary(result, stockName);
+      const aiSummary = await resolveAiSummary(result, stockName, {
+        freshness: providerResult.freshness,
+        dataLineage: providerResult.dataLineage,
+      });
 
       return NextResponse.json(
         {
@@ -74,6 +77,10 @@ export async function POST(req: Request) {
           marketData: providerResult.marketData,
           chartSeries: providerResult.chartSeries,
           diagnostics: providerResult.diagnostics,
+          dataLineage: providerResult.dataLineage,
+          sourceConsistency: providerResult.sourceConsistency,
+          kisEnv: providerResult.kisEnv,
+          kisFallbackReason: providerResult.kisFallbackReason,
           warning: providerResult.warning,
           data: result,
           aiSummary,
@@ -114,15 +121,38 @@ export async function POST(req: Request) {
   }
 }
 
+type AiSummaryContext = {
+  freshness?: Awaited<ReturnType<typeof getStockDataForAnalysis>>["freshness"];
+  dataLineage?: Awaited<ReturnType<typeof getStockDataForAnalysis>>["dataLineage"];
+};
+
 async function resolveAiSummary(
   result: StockAnalysisResult,
   stockName?: string,
+  context?: AiSummaryContext,
 ): Promise<StockSummaryAiOutput | null> {
   console.log("[StockAI] OPENAI_API_KEY exists", isOpenAIApiKeyConfigured());
 
   try {
     const aiSummaryResult = await generateStockSummary(
-      buildStockSummaryInputFromAnalysis(result, stockName ? { stockName } : undefined),
+      buildStockSummaryInputFromAnalysis(result, {
+        stockName,
+        dataBasis: context?.freshness
+          ? {
+              provider: context.freshness.provider,
+              dataMode: context.freshness.dataMode ?? context.freshness.mode,
+              sourceLabel: context.freshness.sourceLabel,
+              analysisInputSource:
+                context.dataLineage?.analysisInputSource ??
+                result.normalized.metadata?.analysisInputSource ??
+                result.normalized.metadata?.dataSource,
+              isRealtime: context.freshness.isRealtime,
+              baseDate: context.freshness.baseDate,
+              vwapBasis: context.dataLineage?.vwapBasis,
+              week52HistoryLabel: context.dataLineage?.week52HistoryLabel,
+            }
+          : undefined,
+      }),
     );
 
     const aiSummary = aiSummaryResult.ok ? aiSummaryResult.data : null;

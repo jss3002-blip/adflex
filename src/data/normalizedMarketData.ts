@@ -14,11 +14,17 @@ import type {
 
 export type { NormalizedCandle, NormalizedMarketData };
 
-/** Temporary Samsung (005930) price sanity range until KIS/KRX/Naver cross-validation. */
-const SAMSUNG_PRICE_SCALE_MIN = 30_000;
-const SAMSUNG_PRICE_SCALE_MAX = 150_000;
+/** Samsung (005930) extreme-only guard — catches obvious unit/scale errors, not normal spot prices. */
+const SAMSUNG_PRICE_SANITY_MIN = 10_000;
+const SAMSUNG_PRICE_SANITY_MAX = 1_000_000;
 
 // TODO: Replace single-source range guard with KRX/KIS/Naver cross-source validation.
+
+function isObviousPriceScaleError(price: number): boolean {
+  if (!Number.isFinite(price) || price <= 0) return true;
+  if (price < SAMSUNG_PRICE_SANITY_MIN || price > SAMSUNG_PRICE_SANITY_MAX) return true;
+  return false;
+}
 
 export function assessKoreanPriceScale(
   code: string,
@@ -28,14 +34,12 @@ export function assessKoreanPriceScale(
   let priceScaleSuspicious = false;
   let reliabilityLevel: ReliabilityLevel = "MEDIUM";
 
-  if (code === "005930") {
-    if (currentPrice < SAMSUNG_PRICE_SCALE_MIN || currentPrice > SAMSUNG_PRICE_SCALE_MAX) {
-      priceScaleSuspicious = true;
-      reliabilityLevel = "LIMITED";
-      messages.push(
-        `삼성전자(005930) 현재가 ${currentPrice.toLocaleString("ko-KR")}원이 개발용 기대 범위(${SAMSUNG_PRICE_SCALE_MIN.toLocaleString("ko-KR")}~${SAMSUNG_PRICE_SCALE_MAX.toLocaleString("ko-KR")}원)를 벗어났습니다.`,
-      );
-    }
+  if (code === "005930" && isObviousPriceScaleError(currentPrice)) {
+    priceScaleSuspicious = true;
+    reliabilityLevel = "LIMITED";
+    messages.push(
+      `삼성전자(005930) 현재가 ${currentPrice.toLocaleString("ko-KR")}원은 비정상적으로 보이는 스케일일 수 있습니다. (정상 범위 참고: ${SAMSUNG_PRICE_SANITY_MIN.toLocaleString("ko-KR")}~${SAMSUNG_PRICE_SANITY_MAX.toLocaleString("ko-KR")}원)`,
+    );
   }
 
   return { priceScaleSuspicious, reliabilityLevel, validationMessages: messages };
@@ -93,7 +97,9 @@ export function buildNormalizedMarketData(params: {
   const scaleCheck = assessKoreanPriceScale(code, params.input.currentPrice);
 
   let reliabilityLevel: ReliabilityLevel = scaleCheck.reliabilityLevel;
-  if (params.providerPriority === "FALLBACK") {
+  if (params.provider === "kis-developers" && params.providerPriority === "PRIMARY") {
+    reliabilityLevel = scaleCheck.priceScaleSuspicious ? "MEDIUM" : "HIGH";
+  } else if (params.providerPriority === "FALLBACK") {
     reliabilityLevel =
       scaleCheck.priceScaleSuspicious ? "LIMITED" : reliabilityLevel === "HIGH" ? "LOW" : reliabilityLevel;
   }

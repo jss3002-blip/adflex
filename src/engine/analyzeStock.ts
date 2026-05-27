@@ -254,6 +254,27 @@ export function mergeFinalWarnings(
   return uniqueStrings([...risk.warnings, ...state.warnings, ...action.warnings]);
 }
 
+export function collectInputMetadataWarnings(input: StockAnalysisInput): string[] {
+  const warnings: string[] = [];
+  const meta = input.metadata;
+
+  if (meta?.week52IsLimitedHistory) {
+    const days = meta.periodHighLowDays ?? meta.kisCandleCount;
+    warnings.push(
+      `고가/저가 위치 점수는 KIS 일봉 ${days ?? "제한"}일 구간 기준이며, 실제 52주 전체 고저가 아닙니다.`,
+    );
+  }
+
+  if (meta?.vwapIsDailyEstimate) {
+    warnings.push(
+      meta.vwapBasisLabel ??
+        "VWAP은 틱/분봉 체결가가 아닌 일봉 OHLCV typical price 기준 추정치입니다.",
+    );
+  }
+
+  return warnings;
+}
+
 export function mergeFinalEvidence(
   ohlc: OHLCScoreResult,
   volume: VolumeScoreResult,
@@ -401,7 +422,10 @@ export function analyzeStock(input: StockAnalysisInput): StockAnalysisResult {
     finalScore,
     finalGrade,
     summary: generateFinalSummary(finalGrade, finalScore, risk.riskScore, state, action),
-    warnings: mergeFinalWarnings(risk, state, action),
+    warnings: uniqueStrings([
+      ...mergeFinalWarnings(risk, state, action),
+      ...collectInputMetadataWarnings(normalized),
+    ]),
     evidence: mergeFinalEvidence(ohlc, volume, vwap, risk, state, action),
   };
 }

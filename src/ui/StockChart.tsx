@@ -2,32 +2,44 @@
 
 import { useEffect, useRef } from "react";
 import type { ChartSeriesBundle } from "@/src/chart/buildChartSeries";
-import type { ProviderPriority, ReliabilityLevel } from "@/src/data/stockDataProvider.types";
+import type { DataMode, ProviderPriority, ReliabilityLevel } from "@/src/data/stockDataProvider.types";
 
 type StockChartProps = {
   series: ChartSeriesBundle;
   providerPriority?: ProviderPriority;
+  providerName?: string;
+  dataMode?: DataMode;
   reliabilityLevel?: ReliabilityLevel;
   priceScaleSuspicious?: boolean;
+  chartNotice?: string;
   fallbackMessage?: string;
+  vwapLineTitle?: string;
   height?: number;
 };
 
 export function StockChart({
   series,
   providerPriority,
+  providerName,
+  dataMode,
   reliabilityLevel,
   priceScaleSuspicious,
+  chartNotice,
   fallbackMessage,
+  vwapLineTitle,
   height = 320,
 }: StockChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  const isKisChart = providerName === "kis-developers" || dataMode === "KIS_REST";
+  const resolvedVwapTitle =
+    vwapLineTitle ?? (isKisChart ? "일봉 VWAP(추정)" : "VWAP");
+
   const showFallbackWarning =
-    providerPriority === "FALLBACK" ||
-    reliabilityLevel === "LIMITED" ||
-    reliabilityLevel === "LOW" ||
-    priceScaleSuspicious;
+    !isKisChart &&
+    (providerPriority === "FALLBACK" ||
+      reliabilityLevel === "LOW" ||
+      (reliabilityLevel === "LIMITED" && priceScaleSuspicious));
 
   const isEmpty = series.candlestickData.length === 0;
 
@@ -91,7 +103,7 @@ export function StockChart({
         const vwapSeries = chart.addSeries(LineSeries, {
           color: "#22d3ee",
           lineWidth: 2,
-          title: "VWAP",
+          title: resolvedVwapTitle,
         });
         vwapSeries.setData(series.vwapLineData as Parameters<typeof vwapSeries.setData>[0]);
       }
@@ -132,7 +144,7 @@ export function StockChart({
       disposed = true;
       teardown?.();
     };
-  }, [series, height, isEmpty]);
+  }, [series, height, isEmpty, resolvedVwapTitle]);
 
   if (isEmpty) {
     return (
@@ -147,6 +159,17 @@ export function StockChart({
 
   return (
     <div className="space-y-2">
+      {chartNotice ? (
+        <p
+          className={
+            isKisChart
+              ? "rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-2 text-[11px] leading-5 text-cyan-50/85"
+              : "rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-[11px] leading-5 text-amber-50/80"
+          }
+        >
+          {chartNotice}
+        </p>
+      ) : null}
       {showFallbackWarning && fallbackMessage ? (
         <p className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-[11px] leading-5 text-amber-50/80">
           {fallbackMessage}

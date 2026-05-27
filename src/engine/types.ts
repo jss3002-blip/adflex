@@ -97,6 +97,15 @@ export type StockAnalysisInput = {
     isRealtime?: boolean;
     isConfirmedEOD?: boolean;
     dataSource?: string;
+    analysisInputSource?: string;
+    kisCandleCount?: number;
+    periodHighLowDays?: number;
+    week52IsLimitedHistory?: boolean;
+    week52HistoryLabel?: string;
+    vwapIsDailyEstimate?: boolean;
+    vwapBasisLabel?: string;
+    latestCandleDate?: string;
+    firstCandleDate?: string;
   };
 };
 

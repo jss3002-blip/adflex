@@ -111,6 +111,16 @@ export type StockSummaryInput = {
   participationWeaknessRisk?: number;
   volumeRiskScore?: number;
   riskGateSeverity?: string;
+  dataBasis?: {
+    provider?: string;
+    dataMode?: string;
+    sourceLabel?: string;
+    analysisInputSource?: string;
+    isRealtime?: boolean;
+    baseDate?: string;
+    vwapBasis?: string;
+    week52HistoryLabel?: string;
+  };
 };
 
 export type RiskLevel = {
@@ -1003,7 +1013,11 @@ function createOpenAIClient(): OpenAI | null {
 
 export function buildStockSummaryInputFromAnalysis(
   analysis: StockAnalysisResult,
-  options?: { stockName?: string; guidanceNarrative?: Record<string, unknown> },
+  options?: {
+    stockName?: string;
+    guidanceNarrative?: Record<string, unknown>;
+    dataBasis?: StockSummaryInput["dataBasis"];
+  },
 ): StockSummaryInput {
   const evidence = {
     positive: [...(analysis.evidence?.positive ?? [])],
@@ -1040,6 +1054,7 @@ export function buildStockSummaryInputFromAnalysis(
     riskGateSummary: analysis.riskGateOverlay?.summaryKo,
     evidence,
     guidanceNarrative: options?.guidanceNarrative,
+    dataBasis: options?.dataBasis,
   };
 }
 
@@ -1101,6 +1116,7 @@ function buildUserMessage(input: StockSummaryInput): string {
           ? { overlayScore: input.riskGateOverlayScore }
           : null,
       evidence: input.evidence,
+      dataBasis: input.dataBasis ?? null,
       guidanceNarrative: input.guidanceNarrative ?? null,
     },
     null,

@@ -5,7 +5,12 @@ export type StockDataProviderName = "yahoo-finance" | "kis" | "kis-developers" |
 
 export type ProviderPriority = "PRIMARY" | "SECONDARY" | "FALLBACK";
 
-export type ProviderStatus = "AVAILABLE" | "UNAVAILABLE" | "FALLBACK_USED" | "ERROR";
+export type ProviderStatus =
+  | "OK"
+  | "AVAILABLE"
+  | "UNAVAILABLE"
+  | "FALLBACK_USED"
+  | "ERROR";
 
 export type DataMode =
   | "REALTIME"
@@ -13,7 +18,49 @@ export type DataMode =
   | "EOD"
   | "EOD_FALLBACK"
   | "FALLBACK"
-  | "SAMPLE";
+  | "SAMPLE"
+  | "KIS_REST";
+
+export type ProviderDiagnosticEntry = {
+  provider: StockDataProviderName | "yahoo-finance" | "kis-developers";
+  status: "success" | "failed" | "skipped";
+  stage?: string;
+  message: string;
+  symbol?: string;
+  reason?: string;
+  candleCount?: number;
+  latestCandleDate?: string;
+  latestClose?: number;
+  currentPrice?: number;
+  volume?: number;
+};
+
+export type KisEnvDiagnosticsView = {
+  hasAppKey: boolean;
+  hasAppSecret: boolean;
+  baseUrlHost: string | null;
+  baseUrlConfigured: boolean;
+  useMock: boolean;
+  accountNoConfigured: boolean;
+  configured: boolean;
+};
+
+export type DataLineageBundle = {
+  analysisInputSource: "KIS" | "YAHOO" | "SAMPLE";
+  chartSeriesSource: "KIS" | "YAHOO" | "SAMPLE";
+  marketDataSource: "KIS" | "YAHOO" | "SAMPLE";
+  aiSummaryInputSource: "KIS" | "YAHOO" | "SAMPLE";
+  vwapBasis: string;
+  periodHighLowDays: number;
+  week52IsLimitedHistory: boolean;
+  week52HistoryLabel: string;
+  candleCount: number;
+  latestCandleDate: string;
+  provider: StockDataProviderName;
+  dataMode: DataMode;
+};
+
+export type ProviderDiagnostics = ProviderDiagnosticEntry[];
 
 export type ReliabilityLevel = "HIGH" | "MEDIUM" | "LOW" | "LIMITED";
 
@@ -92,6 +139,10 @@ export type StockDataProviderResult = {
   freshness: StockDataFreshness;
   marketData: NormalizedMarketData;
   chartSeries: ChartSeriesBundle;
-  diagnostics?: unknown;
+  diagnostics?: ProviderDiagnostics | unknown;
+  dataLineage?: DataLineageBundle;
+  sourceConsistency?: { ok: boolean; warnings: string[] };
+  kisEnv?: KisEnvDiagnosticsView;
+  kisFallbackReason?: string;
   warning?: string;
 };
