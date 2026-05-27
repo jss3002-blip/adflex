@@ -167,14 +167,6 @@ type VwapUiState = "below" | "near_above" | "clear_above";
 
 const WHO = "개인 투자자가 다음 거래일에 무엇을 관찰할지 정리하는 안내";
 
-function withObjectParticle(phrase: string): string {
-  if (!phrase) return phrase;
-  const last = phrase.charCodeAt(phrase.length - 1);
-  if (last < 0xac00 || last > 0xd7a3) return `${phrase}을(를)`;
-  const hasJong = (last - 0xac00) % 28 !== 0;
-  return `${phrase}${hasJong ? "을" : "를"}`;
-}
-
 function closeRecoveryConditionPhrase(closeState: CloseStrategyState): string {
   switch (closeState.tier) {
     case "low_range":
@@ -865,9 +857,9 @@ export function buildOneLineSummary(
     case "vwap_monitor":
       return vwapState === "below"
         ? "다음 거래일에는 VWAP 위 회복이 종가까지 이어지는지, 종가가 저가권을 벗어나는지가 핵심입니다."
-        : `다음 거래일에는 평균 거래 단가 위 유지와 ${withObjectParticle(
-            closeState.tier === "low_range" ? "종가 위치 개선" : "종가 안정성",
-          )}이 핵심입니다.`;
+        : `다음 거래일에는 평균 거래 단가 위 유지와 ${
+            closeState.tier === "low_range" ? "종가 위치 개선" : "종가 안정성"
+          }이 핵심입니다.`;
     case "strong_trend":
       return "현재는 흐름이 비교적 양호하므로, 무리한 경계보다 추세 유지와 과열 여부를 함께 확인하는 것이 적절합니다.";
     case "week52_high_breakout":

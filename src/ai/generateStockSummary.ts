@@ -5,6 +5,9 @@
  * - Rule engine (`analyzeStock`) computes finalScore, riskScore, state, actionCode, and auxiliary scores.
  * - This module ONLY rewrites those results into customer-facing Korean copy.
  * - NEVER import from Client Components. NEVER use NEXT_PUBLIC_OPENAI_API_KEY.
+ *
+ * TODO(next, out of scope here): Yahoo Finance 원본 가격 스케일 검증 — 예: 005930.KS 종목에서
+ * UI에 current/close 307,000 등이 표시될 때 provider 단위·조정값이 맞는지 별도 조사 필요.
  */
 
 import OpenAI from "openai";
@@ -195,13 +198,76 @@ const FORBIDDEN_OVERALL_HIGH_RISK_PHRASES = [
 const FORBIDDEN_SIXW_GENERIC = [
   "투자자와 시장 참여자들",
   "주식 시장에서",
+  "주식 시장",
   "가격 흐름을 면밀히 분석하여",
   "리스크 관리 차원에서",
   "단기 수급 상황",
+  "단기 흐름의 신뢰도를 높이기 위해",
   "시장에서",
   "투자자들이",
   "면밀히 관찰",
 ];
+
+/** Samsung-like: weak VWAP/close vs strong 52-week — use fixed 6W actor/checkpoint copy. */
+export function isVwapCloseWeek52ConflictPattern(ctx: ScoreContext): boolean {
+  return (
+    ctx.vwapScore < 50 &&
+    ctx.closePositionScore <= 40 &&
+    ctx.week52PositionScore >= 70
+  );
+}
+
+function sixWFieldBlob(sixW: Partial<SixWForecast> | undefined): string {
+  if (!sixW) return "";
+  return [sixW.who, sixW.when, sixW.where, sixW.what, sixW.why, sixW.how]
+    .filter((s): s is string => typeof s === "string" && s.length > 0)
+    .join("|");
+}
+
+/** True when OpenAI (or partial) 6W core is generic, forbidden, or non-actionable. */
+export function isSixWCoreGeneric(sixW: Partial<SixWForecast> | undefined): boolean {
+  if (!sixW) return true;
+
+  const blob = sixWFieldBlob(sixW);
+  if (!blob.trim()) return true;
+
+  for (const phrase of FORBIDDEN_SIXW_GENERIC) {
+    if (blob.includes(phrase)) return true;
+  }
+
+  const who = (sixW.who ?? "").trim();
+  const when = (sixW.when ?? "").trim();
+  const where = (sixW.where ?? "").trim();
+  const what = (sixW.what ?? "").trim();
+  const why = (sixW.why ?? "").trim();
+
+  if (/주식\s*$/.test(who) || (who.includes("주식") && !who.includes("보유") && !who.includes("매수"))) {
+    return true;
+  }
+  if (where === "주식 시장" || where === "시장" || /^주식\s*시장/.test(where)) {
+    return true;
+  }
+  if (when === "다음 거래일" || (when.includes("다음 거래일") && !when.includes("장"))) {
+    return true;
+  }
+  if (what.length > 0 && what.length < 18 && !what.includes("종가") && !what.includes("마감")) {
+    return true;
+  }
+  if (why.includes("신뢰도를 높이기 위해") && !why.includes("부족") && !why.includes("약해")) {
+    return true;
+  }
+
+  return false;
+}
+
+export function shouldUseDeterministicSixWCore(
+  ctx: ScoreContext,
+  openAiSixW: Partial<SixWForecast> | undefined,
+): boolean {
+  if (isVwapCloseWeek52ConflictPattern(ctx)) return true;
+  if (ctx.vwapBreakdownRiskScore >= 65 && ctx.closePositionScore <= 40) return true;
+  return isSixWCoreGeneric(openAiSixW);
+}
 
 export function getRiskLevel(score: number): RiskLevel {
   const clamped = Math.max(0, Math.min(100, score));
@@ -439,23 +505,88 @@ export function buildNextCheckpoints(): string[] {
 }
 
 export function buildSixWForecast(ctx: ScoreContext): SixWForecast {
+  if (isVwapCloseWeek52ConflictPattern(ctx)) {
+    return {
+      who: "단기 매수세와 기존 보유자",
+      when: "다음 거래일 장 초반부터 종가까지",
+      where: "VWAP 부근과 당일 저가권 이탈 여부에서",
+      what: "평균 단가 위 회복과 종가 위치 개선을 확인해야 합니다.",
+      why: "52주 위치는 양호하지만 VWAP와 종가 위치가 약해 단기 회복 신뢰도가 아직 부족하기 때문입니다.",
+      how: "장중 회복이 거래량을 동반해 VWAP 위에서 종가까지 유지되는지 확인해야 합니다.",
+      probabilityNote: HOW_MUCH_DISCLAIMER,
+    };
+  }
+
   const week52 = ctx.week52PositionScore;
-  const whyParts = [
-    week52 >= 70
-      ? `52주 위치 점수 ${formatScore(week52)}점으로 장기 위치는 양호하지만`
-      : "장기 위치 신호가 제한적이지만",
-    `VWAP 점수 ${formatScore(ctx.vwapScore)}점과 종가 위치 점수 ${formatScore(ctx.closePositionScore)}점이 약해 단기 회복 신뢰도가 아직 부족하기 때문입니다.`,
-  ].join(" ");
+  const weakVwapClose = ctx.vwapScore < 50 || ctx.closePositionScore <= 40;
+
+  if (weakVwapClose && ctx.vwapBreakdownRiskScore >= 65) {
+    return {
+      who: "단기 매수세와 기존 보유자",
+      when: "다음 거래일 장 초반부터 종가까지",
+      where: "단기 기준선(VWAP) 부근과 당일 저가권 이탈 여부에서",
+      what: "평균 거래 단가 위 회복과 마감 위치 개선을 확인해야 합니다.",
+      why:
+        week52 >= 70
+          ? "52주 위치는 양호하지만 평균 거래 단가·종가 위치가 약해 가격 회복 신뢰도가 아직 부족하기 때문입니다."
+          : `평균 거래 단가 점수 ${formatScore(ctx.vwapScore)}점·종가 위치 ${formatScore(ctx.closePositionScore)}점이 약해 단기 회복 신뢰도 확인이 우선입니다.`,
+      how: "장중 회복이 거래량을 동반해 단기 기준선 위에서 종가까지 유지되는지 확인해야 합니다.",
+      probabilityNote: HOW_MUCH_DISCLAIMER,
+    };
+  }
 
   return {
     who: "단기 매수세와 기존 보유자",
     when: "다음 거래일 장 초반부터 종가까지",
-    where: "VWAP 부근과 당일 저가권 이탈 여부에서",
-    what: "평균 단가 위 회복과 종가 위치 개선을 확인해야 합니다.",
-    why: whyParts,
-    how: "장중 회복이 거래량을 동반해 VWAP 위에서 종가까지 유지되는지 확인해야 합니다.",
+    where: "평균 거래 단가(VWAP) 부근과 당일 가격 범위 하단 이탈 여부에서",
+    what: "평균 거래 단가 위 안착과 마감 위치 개선을 확인해야 합니다.",
+    why:
+      week52 >= 70
+        ? `52주 위치 점수 ${formatScore(week52)}점은 양호하나, 단기 기준선·종가 신호가 약해 가격 회복 신뢰도는 추가 확인이 필요합니다.`
+        : `종합 리스크 ${formatScore(ctx.riskScore)}점(${ctx.riskLevel.label}) 구간에서 다음 세션의 가격 회복 신뢰도를 점검해야 합니다.`,
+    how: "장중 반등이 거래 참여를 동반해 VWAP 위에서 종가까지 이어지는지 확인해야 합니다.",
     probabilityNote: HOW_MUCH_DISCLAIMER,
   };
+}
+
+function mergeSixWCoreFields(
+  ctx: ScoreContext,
+  openAiSixW: Partial<SixWForecast> | undefined,
+): Pick<SixWForecast, "who" | "when" | "where" | "what" | "why" | "how"> {
+  const deterministic = buildSixWForecast(ctx);
+
+  if (shouldUseDeterministicSixWCore(ctx, openAiSixW)) {
+    return {
+      who: deterministic.who,
+      when: deterministic.when,
+      where: deterministic.where,
+      what: deterministic.what,
+      why: deterministic.why,
+      how: deterministic.how,
+    };
+  }
+
+  const merged = {
+    who: sanitizeTextForScoreRules(openAiSixW?.who ?? deterministic.who, ctx),
+    when: sanitizeTextForScoreRules(openAiSixW?.when ?? deterministic.when, ctx),
+    where: sanitizeTextForScoreRules(openAiSixW?.where ?? deterministic.where, ctx),
+    what: sanitizeTextForScoreRules(openAiSixW?.what ?? deterministic.what, ctx),
+    why: sanitizeTextForScoreRules(openAiSixW?.why ?? deterministic.why, ctx),
+    how: sanitizeTextForScoreRules(openAiSixW?.how ?? deterministic.how, ctx),
+  };
+
+  if (isSixWCoreGeneric(merged)) {
+    return {
+      who: deterministic.who,
+      when: deterministic.when,
+      where: deterministic.where,
+      what: deterministic.what,
+      why: deterministic.why,
+      how: deterministic.how,
+    };
+  }
+
+  return merged;
 }
 
 function buildHowMuchScenarioWeights(ctx: ScoreContext): SixWHowMuch {
@@ -626,20 +757,13 @@ export function normalizeAiSummaryByScoreRules(
   aiSummary: StockSummaryAiOutput,
   ctx: ScoreContext,
 ): StockSummaryAiOutput {
-  const sixW = buildSixWForecast(ctx);
   const howMuch = buildHowMuchScenarioWeights(ctx);
   const consumer = buildConsumerDecisionGuide(ctx);
   const dynamic = buildDynamicReasoning(ctx);
+  const sixWCore = mergeSixWCoreFields(ctx, aiSummary.sixWForecast);
 
   const mergedSixW: SixWForecast = {
-    ...sixW,
-    ...(aiSummary.sixWForecast ?? {}),
-    who: sanitizeTextForScoreRules(aiSummary.sixWForecast?.who || sixW.who, ctx),
-    when: sanitizeTextForScoreRules(aiSummary.sixWForecast?.when || sixW.when, ctx),
-    where: sanitizeTextForScoreRules(aiSummary.sixWForecast?.where || sixW.where, ctx),
-    what: sanitizeTextForScoreRules(aiSummary.sixWForecast?.what || sixW.what, ctx),
-    why: sanitizeTextForScoreRules(aiSummary.sixWForecast?.why || sixW.why, ctx),
-    how: sanitizeTextForScoreRules(aiSummary.sixWForecast?.how || sixW.how, ctx),
+    ...sixWCore,
     howMuch,
     consumerDecisionGuide: consumer,
     dynamicReasoning: dynamic,

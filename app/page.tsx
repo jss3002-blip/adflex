@@ -1648,6 +1648,7 @@ function DetailedAnalysisSection({
             ["거래량", formatNumber(result.normalized?.volume)],
           ]}
         />
+        {/* TODO(next): Yahoo Finance 원본 가격 스케일 검증 — 005930.KS 등에서 UI 가격(예: 307,000)과 provider 단위 일치 여부 별도 조사 */}
         {diagnostics ? (
           <DetailCard
             title="데이터 원본 확인"
@@ -2246,11 +2247,13 @@ function getNormalScoreLabel(score: number): string {
   return "매우 약함";
 }
 
+/** Aligns with StockAI risk bands (same as AI summary RISK_LEVEL_RULES). */
 function getRiskScoreLabel(score: number): string {
-  if (score >= 80) return "매우 높음";
-  if (score >= 60) return "위험 높음";
-  if (score >= 40) return "보통";
-  if (score >= 20) return "관리 가능";
+  const clamped = Math.max(0, Math.min(100, score));
+  if (clamped >= 86) return "매우 높음";
+  if (clamped >= 71) return "높음";
+  if (clamped >= 51) return "주의";
+  if (clamped >= 31) return "보통";
   return "낮음";
 }
 
@@ -2263,11 +2266,12 @@ function getNormalScoreColor(score: number) {
 }
 
 function getRiskScoreColor(score: number) {
-  if (score >= 80) return { bar: "bg-red-800", badge: "bg-red-500/20 text-red-100" };
-  if (score >= 60) return { bar: "bg-red-500", badge: "bg-red-400/15 text-red-100" };
-  if (score >= 40) return { bar: "bg-yellow-300", badge: "bg-yellow-300/15 text-yellow-100" };
-  if (score >= 20) return { bar: "bg-emerald-400", badge: "bg-emerald-300/15 text-emerald-100" };
-  return { bar: "bg-green-400", badge: "bg-green-300/15 text-green-100" };
+  const clamped = Math.max(0, Math.min(100, score));
+  if (clamped >= 86) return { bar: "bg-red-800", badge: "bg-red-500/20 text-red-100" };
+  if (clamped >= 71) return { bar: "bg-red-500", badge: "bg-red-400/15 text-red-100" };
+  if (clamped >= 51) return { bar: "bg-orange-400", badge: "bg-orange-300/15 text-orange-100" };
+  if (clamped >= 31) return { bar: "bg-yellow-300", badge: "bg-yellow-300/15 text-yellow-100" };
+  return { bar: "bg-emerald-400", badge: "bg-emerald-300/15 text-emerald-100" };
 }
 
 function getActionPriorityLabel(score: number): string {
