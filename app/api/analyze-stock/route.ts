@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
-import { analyzeStock } from "@/src/engine/analyzeStock";
+import { analyzeStock, type StockAnalysisResult } from "@/src/engine/analyzeStock";
 import { sampleStockInput } from "@/src/data/sampleStockInput";
 import { buildSampleFreshness, getStockDataForAnalysis } from "@/src/data/stockDataProvider";
+import {
+  buildStockSummaryInputFromAnalysis,
+  generateStockSummary,
+  isOpenAIApiKeyConfigured,
+  type StockSummaryAiOutput,
+} from "@/src/ai/generateStockSummary";
+
+export const runtime = "nodejs";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
@@ -11,6 +19,7 @@ const JSON_HEADERS = {
 export async function GET() {
   try {
     const result = analyzeStock(sampleStockInput);
+    const aiSummary = await resolveAiSummary(result);
 
     return NextResponse.json(
       {
@@ -19,6 +28,7 @@ export async function GET() {
         source: "sample",
         freshness: buildSampleFreshness("SAMPLE"),
         data: result,
+        aiSummary,
       },
       { status: 200, headers: JSON_HEADERS },
     );
@@ -35,6 +45,7 @@ export async function POST(req: Request) {
     if (!stockName) {
       const freshness = buildSampleFreshness("SAMPLE");
       const result = analyzeStock(sampleStockInput);
+      const aiSummary = await resolveAiSummary(result);
 
       return NextResponse.json(
         {
@@ -43,6 +54,7 @@ export async function POST(req: Request) {
           source: freshness.provider,
           freshness,
           data: result,
+          aiSummary,
         },
         { status: 200, headers: JSON_HEADERS },
       );
@@ -54,6 +66,7 @@ export async function POST(req: Request) {
         provider: "yahoo-finance",
       });
       const result = analyzeStock(providerResult.input);
+      const aiSummary = await resolveAiSummary(result, stockName);
 
       return NextResponse.json(
         {
@@ -64,6 +77,7 @@ export async function POST(req: Request) {
           diagnostics: providerResult.diagnostics,
           warning: providerResult.warning,
           data: result,
+          aiSummary,
         },
         { status: 200, headers: JSON_HEADERS },
       );
@@ -81,6 +95,7 @@ export async function POST(req: Request) {
 
       const freshness = buildSampleFreshness("FALLBACK");
       const result = analyzeStock(sampleStockInput);
+      const aiSummary = await resolveAiSummary(result, stockName);
 
       return NextResponse.json(
         {
@@ -90,12 +105,50 @@ export async function POST(req: Request) {
           freshness,
           warning: "실제 시세 데이터를 가져오지 못해 샘플 데이터로 대체했습니다.",
           data: result,
+          aiSummary,
         },
         { status: 200, headers: JSON_HEADERS },
       );
     }
   } catch (error) {
     return createAnalysisErrorResponse(error);
+  }
+}
+
+async function resolveAiSummary(
+  result: StockAnalysisResult,
+  stockName?: string,
+): Promise<StockSummaryAiOutput | null> {
+  console.log("[StockAI] OPENAI_API_KEY exists", isOpenAIApiKeyConfigured());
+
+  try {
+    const aiSummaryResult = await generateStockSummary(
+      buildStockSummaryInputFromAnalysis(result, stockName ? { stockName } : undefined),
+    );
+
+    const aiSummary = aiSummaryResult.ok ? aiSummaryResult.data : null;
+    console.log("[StockAI] aiSummary", JSON.stringify(aiSummary, null, 2));
+    console.log("[StockAI] has sixWForecast", Boolean(aiSummary?.sixWForecast));
+    console.log("[StockAI] has howMuch", Boolean(aiSummary?.sixWForecast?.howMuch));
+    console.log(
+      "[StockAI] has consumerDecisionGuide",
+      Boolean(aiSummary?.sixWForecast?.consumerDecisionGuide),
+    );
+    console.log(
+      "[StockAI] has dynamicReasoning",
+      Boolean(aiSummary?.sixWForecast?.dynamicReasoning),
+    );
+
+    if (aiSummary) return aiSummary;
+
+    console.error(
+      "[StockAI] AI summary generation failed",
+      aiSummaryResult.error ?? aiSummaryResult.source,
+    );
+    return null;
+  } catch (error) {
+    console.error("[StockAI] AI summary generation failed", error);
+    return null;
   }
 }
 
@@ -129,4 +182,3 @@ function getErrorMessage(error: unknown): string {
   if (typeof error === "string") return error;
   return "Unknown error";
 }
-

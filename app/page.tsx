@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { buildDynamicConfirmationFallbacks } from "@/src/engine/confirmationFallback";
 import { dedupeConfirmationCards } from "@/src/ui/dedupeConfirmationCards";
 import { NextTradingDayGuidanceSection } from "@/src/ui/nextTradingDayGuidance";
@@ -233,6 +233,72 @@ type YahooProviderDiagnostics = {
   note: string;
 };
 
+type StockAiSummary = {
+  title: string;
+  oneLine: string;
+  keyPoints: string[];
+  riskComment: string;
+  nextCheckpoints: string[];
+  caution: string;
+  sixWForecast?: StockAiSixWForecast;
+};
+
+type StockAiEvidenceScore = {
+  label: string;
+  value: string;
+  meaning: string;
+};
+
+type StockAiHowMuch = {
+  currentBias: {
+    label: string;
+    probabilityRange: string;
+    reason: string;
+  };
+  scenarioShift: {
+    recoveryIf: string;
+    recoveryProbabilityAfterTrigger: string;
+    neutralIf: string;
+    neutralProbabilityRange: string;
+    cautionIf: string;
+    cautionProbabilityAfterTrigger: string;
+  };
+  confidence: {
+    level: "낮음" | "보통" | "높음";
+    reason: string;
+  };
+  evidenceScores: StockAiEvidenceScore[];
+};
+
+type StockAiConsumerDecisionGuide = {
+  currentMode: string;
+  entryBeforeCheck: string[];
+  holderCheck: string[];
+  avoidOrDelayCondition: string[];
+  improvementCondition: string[];
+  riskControlFocus: string[];
+};
+
+type StockAiDynamicReasoning = {
+  stockPersonality: string;
+  scoreInterpretationMode: string;
+  whyThisStockNeedsThisInterpretation: string;
+  flexibleThinkingRules: string[];
+};
+
+type StockAiSixWForecast = {
+  who: string;
+  when: string;
+  where: string;
+  what: string;
+  why: string;
+  how: string;
+  howMuch?: StockAiHowMuch;
+  consumerDecisionGuide?: StockAiConsumerDecisionGuide;
+  dynamicReasoning?: StockAiDynamicReasoning;
+  probabilityNote?: string;
+};
+
 type StockAnalysisApiResponse = {
   success: boolean;
   mode?: StockDataFreshness["mode"];
@@ -241,6 +307,7 @@ type StockAnalysisApiResponse = {
   diagnostics?: unknown;
   warning?: string;
   data?: StockAnalysisViewResult;
+  aiSummary?: StockAiSummary | null;
   error?: string;
   detail?: string;
 };
@@ -363,6 +430,7 @@ function formatSummaryForDisplay(summary: string | undefined): string {
 
 export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<StockAnalysisViewResult | null>(null);
+  const [aiSummary, setAiSummary] = useState<StockAiSummary | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [stockNameInput, setStockNameInput] = useState("삼성전자");
@@ -383,12 +451,21 @@ export default function Home() {
     }
   }, [analysisResult]);
 
-  async function handleAnalyzeStock() {
-    const selectedStockName = stockNameInput.trim() || "삼성전자";
+  async function handleAnalyzeStock(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const selectedStockName = stockNameInput.trim();
+    if (!selectedStockName) {
+      return;
+    }
+
     setIsAnalyzing(true);
     setAnalysisError("");
+    setAiSummary(null);
 
     try {
+      console.log("[StockAI] analyze request start", selectedStockName);
+
       const response = await fetch("/api/analyze-stock", {
         method: "POST",
         cache: "no-store",
@@ -399,18 +476,24 @@ export default function Home() {
           stockName: selectedStockName,
         }),
       });
-      const payload = (await response.json()) as StockAnalysisApiResponse;
+      const data = (await response.json()) as StockAnalysisApiResponse;
+      console.log("[StockAI] analyze response", data);
 
-      if (!response.ok || !payload.success || !payload.data) {
-        setAnalysisError(payload.detail || payload.error || "분석 결과를 불러오지 못했습니다.");
+      if (!response.ok || !data.success || !data.data) {
+        setAnalysisError(data.detail || data.error || "분석 결과를 불러오지 못했습니다.");
         return;
       }
 
-      setAnalysisResult(payload.data);
+      setAnalysisResult(data.data);
+      console.log("[StockAI UI] raw data.aiSummary", data.aiSummary);
+      const parsedAiSummary = parseStockAiSummary(data.aiSummary);
+      console.log("[StockAI UI] parsed aiSummary", parsedAiSummary);
+      console.log("[StockAI UI] parsed sixWForecast", parsedAiSummary?.sixWForecast);
+      setAiSummary(parsedAiSummary);
       setAnalyzedStockName(selectedStockName);
       setAnalysisMeta({
-        freshness: payload.freshness,
-        warning: payload.warning || "",
+        freshness: data.freshness,
+        warning: data.warning || "",
       });
     } catch (error) {
       setAnalysisError(error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.");
@@ -491,44 +574,54 @@ export default function Home() {
             </p>
           </div>
 
-          <div
-            className={`rounded-[1.5rem] border border-white/10 bg-white/[0.04] shadow-[0_24px_90px_-70px_rgba(34,211,238,0.85)] backdrop-blur-xl ${
-              hasResult ? "p-3" : "p-3"
-            }`}
+          <form
+            className="space-y-3"
+            onSubmit={(event) => {
+              void handleAnalyzeStock(event);
+            }}
           >
-            <label htmlFor="stock-name" className="px-1 text-xs font-semibold text-cyan-100/75">
-              분석할 종목명
-            </label>
-            <input
-              id="stock-name"
-              value={stockNameInput}
-              onChange={(event) => setStockNameInput(event.target.value)}
-              placeholder="예: 삼성전자, SK하이닉스, 현대차"
-              className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white outline-none transition placeholder:text-white/35 focus:border-cyan-300/45 focus:bg-black/30"
-            />
-            <p className="mt-2 px-1 text-xs leading-5 text-white/42">
-              {hasResult ? "다른 종목명을 입력해 바로 다시 분석할 수 있습니다." : "종목명을 입력하면 현재 연결된 데이터 기준으로 분석합니다."}
-            </p>
-          </div>
+            <div
+              className={`rounded-[1.5rem] border border-white/10 bg-white/[0.04] shadow-[0_24px_90px_-70px_rgba(34,211,238,0.85)] backdrop-blur-xl ${
+                hasResult ? "p-3" : "p-3"
+              }`}
+            >
+              <label htmlFor="stock-name" className="px-1 text-xs font-semibold text-cyan-100/75">
+                분석할 종목명
+              </label>
+              <input
+                id="stock-name"
+                name="stockName"
+                value={stockNameInput}
+                onChange={(event) => setStockNameInput(event.target.value)}
+                placeholder="예: 삼성전자, SK하이닉스, 현대차"
+                autoComplete="off"
+                className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white outline-none transition placeholder:text-white/35 focus:border-cyan-300/45 focus:bg-black/30"
+              />
+              <p className="mt-2 px-1 text-xs leading-5 text-white/42">
+                {hasResult
+                  ? "다른 종목명을 입력해 바로 다시 분석할 수 있습니다."
+                  : "종목명을 입력하면 현재 연결된 데이터 기준으로 분석합니다."}
+              </p>
+            </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={handleAnalyzeStock}
-              disabled={isAnalyzing}
-              className="group inline-flex h-13 items-center justify-center gap-2 rounded-2xl bg-white px-6 text-sm font-semibold text-black shadow-[0_24px_70px_-38px_rgba(255,255,255,0.75)] transition hover:-translate-y-0.5 hover:bg-cyan-100"
-            >
-              {isAnalyzing ? "분석 중..." : "AI 주식 분석하기"}
-              <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-0.5" />
-            </button>
-            <a
-              href="#engine"
-              className="inline-flex h-13 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-6 text-sm font-semibold text-white/80 backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.07] hover:text-white"
-            >
-              분석 엔진 보기
-              <Icon name="gauge" className="h-4 w-4" />
-            </a>
-          </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="submit"
+                disabled={isAnalyzing}
+                className="group inline-flex h-13 items-center justify-center gap-2 rounded-2xl bg-white px-6 text-sm font-semibold text-black shadow-[0_24px_70px_-38px_rgba(255,255,255,0.75)] transition hover:-translate-y-0.5 hover:bg-cyan-100"
+              >
+                {isAnalyzing ? "분석 중..." : "AI 주식 분석하기"}
+                <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-0.5" />
+              </button>
+              <a
+                href="#engine"
+                className="inline-flex h-13 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-6 text-sm font-semibold text-white/80 backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.07] hover:text-white"
+              >
+                분석 엔진 보기
+                <Icon name="gauge" className="h-4 w-4" />
+              </a>
+            </div>
+          </form>
 
           {analysisError ? (
             <div className="rounded-3xl border border-rose-300/20 bg-rose-400/[0.08] p-5 text-sm text-rose-100 shadow-[0_24px_80px_-58px_rgba(244,63,94,0.85)] backdrop-blur-xl">
@@ -597,6 +690,7 @@ export default function Home() {
             result={analysisResult}
             targetStockName={analyzedStockName}
             meta={analysisMeta}
+            aiSummary={aiSummary}
           />
         </section>
       ) : null}
@@ -797,14 +891,461 @@ export default function Home() {
   );
 }
 
+function parseStockAiSummary(value: unknown): StockAiSummary | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const title = typeof record.title === "string" ? record.title.trim() : "";
+  const oneLine = typeof record.oneLine === "string" ? record.oneLine.trim() : "";
+  const riskComment = typeof record.riskComment === "string" ? record.riskComment.trim() : "";
+  const caution = typeof record.caution === "string" ? record.caution.trim() : "";
+  const keyPoints = Array.isArray(record.keyPoints)
+    ? record.keyPoints
+        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        .map((item) => item.trim())
+    : [];
+  const nextCheckpoints = Array.isArray(record.nextCheckpoints)
+    ? record.nextCheckpoints
+        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        .map((item) => item.trim())
+    : [];
+  const sixWForecast = parseSixWForecast(record.sixWForecast);
+
+  if (!title || !oneLine || !riskComment || !caution || keyPoints.length === 0 || nextCheckpoints.length === 0) {
+    return null;
+  }
+
+  return { title, oneLine, keyPoints, riskComment, nextCheckpoints, caution, sixWForecast };
+}
+
+function parseStringList(value: unknown, maxItems = 10): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((s) => s.length > 0)
+    .slice(0, maxItems);
+}
+
+function parseSixWForecast(value: unknown): StockAiSixWForecast | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const r = value as Record<string, unknown>;
+
+  const who = typeof r.who === "string" ? r.who.trim() : "";
+  const when = typeof r.when === "string" ? r.when.trim() : "";
+  const where = typeof r.where === "string" ? r.where.trim() : "";
+  const what = typeof r.what === "string" ? r.what.trim() : "";
+  const why = typeof r.why === "string" ? r.why.trim() : "";
+  const how = typeof r.how === "string" ? r.how.trim() : "";
+
+  const coreNonEmptyCount = [who, when, where, what, why, how].filter((s) => Boolean(s)).length;
+  if (coreNonEmptyCount === 0) return undefined;
+
+  let howMuch: StockAiHowMuch | undefined;
+  if (r.howMuch && typeof r.howMuch === "object") {
+    const hm = r.howMuch as Record<string, unknown>;
+    const cb = hm.currentBias && typeof hm.currentBias === "object" ? (hm.currentBias as Record<string, unknown>) : null;
+    const ss =
+      hm.scenarioShift && typeof hm.scenarioShift === "object" ? (hm.scenarioShift as Record<string, unknown>) : null;
+    const conf = hm.confidence && typeof hm.confidence === "object" ? (hm.confidence as Record<string, unknown>) : null;
+
+    const currentBias = cb
+      ? {
+          label: typeof cb.label === "string" ? cb.label.trim() : "",
+          probabilityRange: typeof cb.probabilityRange === "string" ? cb.probabilityRange.trim() : "",
+          reason: typeof cb.reason === "string" ? cb.reason.trim() : "",
+        }
+      : null;
+
+    const scenarioShift = ss
+      ? {
+          recoveryIf: typeof ss.recoveryIf === "string" ? ss.recoveryIf.trim() : "",
+          recoveryProbabilityAfterTrigger:
+            typeof ss.recoveryProbabilityAfterTrigger === "string" ? ss.recoveryProbabilityAfterTrigger.trim() : "",
+          neutralIf: typeof ss.neutralIf === "string" ? ss.neutralIf.trim() : "",
+          neutralProbabilityRange: typeof ss.neutralProbabilityRange === "string" ? ss.neutralProbabilityRange.trim() : "",
+          cautionIf: typeof ss.cautionIf === "string" ? ss.cautionIf.trim() : "",
+          cautionProbabilityAfterTrigger:
+            typeof ss.cautionProbabilityAfterTrigger === "string" ? ss.cautionProbabilityAfterTrigger.trim() : "",
+        }
+      : null;
+
+    const confidence = conf
+      ? {
+          level:
+            (typeof conf.level === "string" && (conf.level === "낮음" || conf.level === "보통" || conf.level === "높음")
+              ? conf.level
+              : "보통") as "낮음" | "보통" | "높음",
+          reason: typeof conf.reason === "string" ? conf.reason.trim() : "",
+        }
+      : null;
+
+    const evidenceScores = Array.isArray(hm.evidenceScores)
+      ? (hm.evidenceScores as unknown[])
+          .map((item) => (item && typeof item === "object" ? (item as Record<string, unknown>) : null))
+          .filter((item): item is Record<string, unknown> => Boolean(item))
+          .map((item) => ({
+            label: typeof item.label === "string" ? item.label.trim() : "",
+            value: typeof item.value === "string" ? item.value.trim() : "",
+            meaning: typeof item.meaning === "string" ? item.meaning.trim() : "",
+          }))
+          .filter((item) => item.label || item.value || item.meaning)
+      : [];
+
+    if (currentBias && scenarioShift && confidence) {
+      howMuch = {
+        currentBias,
+        scenarioShift,
+        confidence,
+        evidenceScores,
+      };
+    }
+  }
+
+  let consumerDecisionGuide: StockAiConsumerDecisionGuide | undefined;
+  if (r.consumerDecisionGuide && typeof r.consumerDecisionGuide === "object") {
+    const c = r.consumerDecisionGuide as Record<string, unknown>;
+    const currentMode = typeof c.currentMode === "string" ? c.currentMode.trim() : "";
+    const entryBeforeCheck = parseStringList(c.entryBeforeCheck, 8);
+    const holderCheck = parseStringList(c.holderCheck, 8);
+    const avoidOrDelayCondition = parseStringList(c.avoidOrDelayCondition, 8);
+    const improvementCondition = parseStringList(c.improvementCondition, 8);
+    const riskControlFocus = parseStringList(c.riskControlFocus, 8);
+
+    if (
+      currentMode ||
+      entryBeforeCheck.length ||
+      holderCheck.length ||
+      avoidOrDelayCondition.length ||
+      improvementCondition.length ||
+      riskControlFocus.length
+    ) {
+      consumerDecisionGuide = {
+        currentMode,
+        entryBeforeCheck,
+        holderCheck,
+        avoidOrDelayCondition,
+        improvementCondition,
+        riskControlFocus,
+      };
+    }
+  }
+
+  let dynamicReasoning: StockAiDynamicReasoning | undefined;
+  if (r.dynamicReasoning && typeof r.dynamicReasoning === "object") {
+    const d = r.dynamicReasoning as Record<string, unknown>;
+    const stockPersonality = typeof d.stockPersonality === "string" ? d.stockPersonality.trim() : "";
+    const scoreInterpretationMode = typeof d.scoreInterpretationMode === "string" ? d.scoreInterpretationMode.trim() : "";
+    const whyThisStockNeedsThisInterpretation =
+      typeof d.whyThisStockNeedsThisInterpretation === "string" ? d.whyThisStockNeedsThisInterpretation.trim() : "";
+    const flexibleThinkingRules = parseStringList(d.flexibleThinkingRules, 10);
+
+    if (stockPersonality || scoreInterpretationMode || whyThisStockNeedsThisInterpretation || flexibleThinkingRules.length) {
+      dynamicReasoning = {
+        stockPersonality,
+        scoreInterpretationMode,
+        whyThisStockNeedsThisInterpretation,
+        flexibleThinkingRules,
+      };
+    }
+  }
+
+  const probabilityNote = typeof r.probabilityNote === "string" ? r.probabilityNote.trim() : "";
+
+  return {
+    who,
+    when,
+    where,
+    what,
+    why,
+    how,
+    howMuch,
+    consumerDecisionGuide,
+    dynamicReasoning,
+    probabilityNote: probabilityNote || undefined,
+  };
+}
+
+function AiSummarySection({ aiSummary }: { aiSummary: StockAiSummary | null }) {
+  if (!aiSummary) {
+    return (
+      <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3.5 backdrop-blur-xl">
+        <p className="text-xs leading-6 text-white/45">
+          AI 요약을 생성하지 못했습니다. 아래의 정량 분석 결과를 확인해주세요.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-violet-300/20 bg-gradient-to-br from-violet-400/[0.09] via-white/[0.04] to-cyan-300/[0.07] p-5 shadow-[0_24px_90px_-62px_rgba(139,92,246,0.65)] backdrop-blur-xl">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-violet-100/90">AI 종합 해석</p>
+          <p className="mt-1 text-[11px] leading-5 text-white/42">
+            매수·매도 추천이 아닌, 규칙 엔진 결과를 바탕으로 한 조건부 해석 안내입니다.
+          </p>
+        </div>
+        <span className="inline-flex shrink-0 rounded-full border border-violet-300/25 bg-violet-300/10 px-3 py-1 text-[10px] font-semibold text-violet-100/85">
+          AI 해석
+        </span>
+      </div>
+
+      <div className="mt-4 space-y-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-100/70">핵심 요약</p>
+          <p className="mt-1.5 text-lg font-semibold leading-7 text-white/92">{aiSummary.title}</p>
+          <p className="mt-2 text-sm leading-7 text-white/72">{aiSummary.oneLine}</p>
+        </div>
+
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-100/70">주요 해석</p>
+          <ul className="mt-2 space-y-2">
+            {aiSummary.keyPoints.map((point) => (
+              <li key={point} className="flex gap-2.5 text-sm leading-6 text-white/75">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-300/80" aria-hidden />
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-xl border border-amber-300/15 bg-amber-300/[0.05] px-3.5 py-3">
+          <p className="text-[11px] font-semibold text-amber-100/85">리스크 코멘트</p>
+          <p className="mt-1.5 text-sm leading-6 text-white/72">{aiSummary.riskComment}</p>
+        </div>
+
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-100/70">다음 확인 조건</p>
+          <ul className="mt-2 space-y-2">
+            {aiSummary.nextCheckpoints.map((checkpoint) => (
+              <li key={checkpoint} className="flex gap-2.5 text-sm leading-6 text-white/72">
+                <span className="mt-0.5 shrink-0 text-[11px] font-semibold text-emerald-200/80">✓</span>
+                <span>{checkpoint}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-black/20 px-3.5 py-3">
+          <p className="text-[11px] font-semibold text-white/55">주의 문구</p>
+          <p className="mt-1.5 text-sm leading-6 text-white/68">{aiSummary.caution}</p>
+        </div>
+      </div>
+
+      {aiSummary.sixWForecast ? (
+        <div className="mt-5 space-y-4 border-t border-white/10 pt-4">
+          <div>
+            <p className="text-[11px] font-semibold text-cyan-100/80">6하원칙 기반 다음 흐름 예측</p>
+            <dl className="mt-2 grid gap-x-6 gap-y-2 text-[11px] leading-5 text-white/72 sm:grid-cols-2">
+              <div>
+                <dt className="font-semibold text-white/75">누가</dt>
+                <dd className="mt-0.5">{aiSummary.sixWForecast.who}</dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-white/75">언제</dt>
+                <dd className="mt-0.5">{aiSummary.sixWForecast.when}</dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-white/75">어디서</dt>
+                <dd className="mt-0.5">{aiSummary.sixWForecast.where}</dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-white/75">무엇을</dt>
+                <dd className="mt-0.5">{aiSummary.sixWForecast.what}</dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="font-semibold text-white/75">왜</dt>
+                <dd className="mt-0.5">{aiSummary.sixWForecast.why}</dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="font-semibold text-white/75">어떻게</dt>
+                <dd className="mt-0.5">{aiSummary.sixWForecast.how}</dd>
+              </div>
+            </dl>
+          </div>
+
+          {aiSummary.sixWForecast.howMuch ? (
+            <div className="rounded-2xl border border-cyan-300/20 bg-black/20 px-3.5 py-3.5">
+              <p className="text-[11px] font-semibold text-cyan-100/80">얼마나: 가능성 변화 분석</p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-[1.1fr_0.9fr]">
+                <div>
+                  <p className="text-[11px] font-semibold text-white/75">현재 우세 판단</p>
+                  <p className="mt-1 text-xs text-white/80">
+                    {aiSummary.sixWForecast.howMuch.currentBias.label} ·{" "}
+                    {aiSummary.sixWForecast.howMuch.currentBias.probabilityRange}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-white/60">
+                    {aiSummary.sixWForecast.howMuch.currentBias.reason}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-white/75">예측 신뢰도</p>
+                  <p className="mt-1 text-xs text-white/80">{aiSummary.sixWForecast.howMuch.confidence.level}</p>
+                  <p className="mt-1 text-[11px] leading-5 text-white/60">
+                    {aiSummary.sixWForecast.howMuch.confidence.reason}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div>
+                  <p className="text-[11px] font-semibold text-emerald-100/85">회복 조건 충족 시</p>
+                  <p className="mt-1 text-[11px] leading-5 text-white/70">
+                    {aiSummary.sixWForecast.howMuch.scenarioShift.recoveryIf}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-emerald-200/80">
+                    {aiSummary.sixWForecast.howMuch.scenarioShift.recoveryProbabilityAfterTrigger}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-cyan-100/85">중립 확인 조건</p>
+                  <p className="mt-1 text-[11px] leading-5 text-white/70">
+                    {aiSummary.sixWForecast.howMuch.scenarioShift.neutralIf}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-cyan-200/80">
+                    {aiSummary.sixWForecast.howMuch.scenarioShift.neutralProbabilityRange}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-amber-100/85">주의 조건 반복 시</p>
+                  <p className="mt-1 text-[11px] leading-5 text-white/70">
+                    {aiSummary.sixWForecast.howMuch.scenarioShift.cautionIf}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-amber-200/85">
+                    {aiSummary.sixWForecast.howMuch.scenarioShift.cautionProbabilityAfterTrigger}
+                  </p>
+                </div>
+              </div>
+
+              {aiSummary.sixWForecast.howMuch.evidenceScores.length > 0 ? (
+                <div className="mt-3 border-t border-white/10 pt-2.5">
+                  <p className="text-[11px] font-semibold text-white/65">산정 근거</p>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {aiSummary.sixWForecast.howMuch.evidenceScores.map((es) => (
+                      <li
+                        key={`${es.label}-${es.value}-${es.meaning}`}
+                        className="text-[11px] leading-5 text-white/65"
+                      >
+                        <span className="font-semibold text-white/78">{es.label}</span>
+                        {es.value ? <span className="text-white/60"> · {es.value}</span> : null}
+                        {es.meaning ? <span className="text-white/60"> — {es.meaning}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {aiSummary.sixWForecast.consumerDecisionGuide ? (
+            <div className="grid gap-3 rounded-2xl border border-white/12 bg-white/[0.03] px-3.5 py-3.5 sm:grid-cols-2">
+              <div>
+                <p className="text-[11px] font-semibold text-cyan-100/80">소비자 판단 보조</p>
+                <p className="mt-1 text-xs font-semibold text-white/80">
+                  현재 모드: {aiSummary.sixWForecast.consumerDecisionGuide.currentMode || "해석 모드 확인 중"}
+                </p>
+
+                {aiSummary.sixWForecast.consumerDecisionGuide.entryBeforeCheck.length > 0 ? (
+                  <div className="mt-2">
+                    <p className="text-[11px] font-semibold text-emerald-100/85">진입 전 확인 조건</p>
+                    <ul className="mt-1 space-y-0.5 text-[11px] leading-5 text-white/70">
+                      {aiSummary.sixWForecast.consumerDecisionGuide.entryBeforeCheck.map((item) => (
+                        <li key={item}>- {item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {aiSummary.sixWForecast.consumerDecisionGuide.holderCheck.length > 0 ? (
+                  <div className="mt-2">
+                    <p className="text-[11px] font-semibold text-cyan-100/85">보유자 관찰 조건</p>
+                    <ul className="mt-1 space-y-0.5 text-[11px] leading-5 text-white/70">
+                      {aiSummary.sixWForecast.consumerDecisionGuide.holderCheck.map((item) => (
+                        <li key={item}>- {item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="space-y-2">
+                {aiSummary.sixWForecast.consumerDecisionGuide.avoidOrDelayCondition.length > 0 ? (
+                  <div>
+                    <p className="text-[11px] font-semibold text-amber-100/85">관망 / 지연 조건</p>
+                    <ul className="mt-1 space-y-0.5 text-[11px] leading-5 text-white/70">
+                      {aiSummary.sixWForecast.consumerDecisionGuide.avoidOrDelayCondition.map((item) => (
+                        <li key={item}>- {item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {aiSummary.sixWForecast.consumerDecisionGuide.improvementCondition.length > 0 ? (
+                  <div>
+                    <p className="text-[11px] font-semibold text-emerald-100/85">해석 개선 조건</p>
+                    <ul className="mt-1 space-y-0.5 text-[11px] leading-5 text-white/70">
+                      {aiSummary.sixWForecast.consumerDecisionGuide.improvementCondition.map((item) => (
+                        <li key={item}>- {item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {aiSummary.sixWForecast.consumerDecisionGuide.riskControlFocus.length > 0 ? (
+                  <div>
+                    <p className="text-[11px] font-semibold text-white/80">리스크 관리 포인트</p>
+                    <ul className="mt-1 space-y-0.5 text-[11px] leading-5 text-white/70">
+                      {aiSummary.sixWForecast.consumerDecisionGuide.riskControlFocus.map((item) => (
+                        <li key={item}>- {item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {aiSummary.sixWForecast.dynamicReasoning ? (
+            <div className="rounded-2xl border border-white/10 bg-black/25 px-3.5 py-3.5">
+              <p className="text-[11px] font-semibold text-cyan-100/80">AI 유동 해석 방식</p>
+              <p className="mt-1 text-[11px] leading-5 text-white/72">
+                종목 성격: {aiSummary.sixWForecast.dynamicReasoning.stockPersonality || "해석 모드 확인 중"}
+              </p>
+              <p className="mt-0.5 text-[11px] leading-5 text-white/72">
+                점수 해석 모드: {aiSummary.sixWForecast.dynamicReasoning.scoreInterpretationMode || "설명 대기"}
+              </p>
+              {aiSummary.sixWForecast.dynamicReasoning.whyThisStockNeedsThisInterpretation ? (
+                <p className="mt-0.5 text-[11px] leading-5 text-white/70">
+                  왜 이 해석이 필요한가: {aiSummary.sixWForecast.dynamicReasoning.whyThisStockNeedsThisInterpretation}
+                </p>
+              ) : null}
+              {aiSummary.sixWForecast.dynamicReasoning.flexibleThinkingRules.length > 0 ? (
+                <ul className="mt-1.5 space-y-0.5 text-[11px] leading-5 text-white/70">
+                  {aiSummary.sixWForecast.dynamicReasoning.flexibleThinkingRules.map((rule) => (
+                    <li key={rule}>- {rule}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {aiSummary.sixWForecast.probabilityNote ? (
+                <p className="mt-1.5 text-[11px] leading-5 text-white/55">{aiSummary.sixWForecast.probabilityNote}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function AnalysisResultCard({
   result,
   targetStockName,
   meta,
+  aiSummary,
 }: {
   result: StockAnalysisViewResult;
   targetStockName: string;
   meta: AnalysisMeta;
+  aiSummary: StockAiSummary | null;
 }) {
   const gradeLabel = getGradeLabel(result.finalGrade);
   const stateLabel = getStateLabel(result.state.primaryState);
@@ -856,6 +1397,8 @@ function AnalysisResultCard({
           </p>
         ) : null}
       </div>
+
+      <AiSummarySection aiSummary={aiSummary} />
 
       <StockAiInterpretationPhilosophy />
 
