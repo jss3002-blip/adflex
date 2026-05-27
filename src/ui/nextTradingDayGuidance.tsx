@@ -175,6 +175,48 @@ function withObjectParticle(phrase: string): string {
   return `${phrase}${hasJong ? "을" : "를"}`;
 }
 
+function closeRecoveryConditionPhrase(closeState: CloseStrategyState): string {
+  switch (closeState.tier) {
+    case "low_range":
+      return "마감이 저가권을 벗어나면";
+    case "improve":
+      return "마감 위치가 중상단으로 개선되면";
+    case "stability":
+      return "마감 안정성이 유지되면";
+    default:
+      return "마감 방어가 유지되면";
+  }
+}
+
+function buildGuidanceFocusLine(
+  theme: GuidanceTheme,
+  vwapState: VwapUiState,
+  closeState: CloseStrategyState,
+): string {
+  switch (theme) {
+    case "volatility_vwap_monitor":
+      return vwapState === "below" || closeState.tier === "low_range"
+        ? "장중 반등보다 회복 흐름이 종가까지 이어지는지가 먼저입니다."
+        : "장중 흔들림 이후 변동폭 완화와 마감 위치가 해석의 기준입니다.";
+    case "vwap_monitor":
+      return vwapState === "below"
+        ? "종가까지 유지가 확인되기 전까지는 성급한 방향 판단보다 관찰이 우선입니다."
+        : "지지·이탈이 갈리는 구간이므로 종가 마감이 다음 판단의 기준입니다.";
+    case "strong_trend":
+      return "추세는 유지되지만 상승 속도와 과열 신호를 함께 봐야 합니다.";
+    case "week52_high_breakout":
+      return "고점권 위치보다 돌파 이후 종가 유지가 더 중요합니다.";
+    case "week52_low_rebound":
+      return "저점 자체보다 반등이 이어지는지가 더 중요합니다.";
+    case "low_liquidity":
+      return "가격 움직임보다 거래 참여 회복이 먼저입니다.";
+    case "false_breakout":
+      return "장중 강세보다 종가까지 유지 여부가 더 중요합니다.";
+    default:
+      return "조건이 맞춰지기 전까지는 추가 확인이 우선입니다.";
+  }
+}
+
 function getTopConfirmationCategory(topConfirmationCards: ConfirmationCardLike[]): string | undefined {
   return topConfirmationCards[0]?.categoryKey;
 }
@@ -697,9 +739,14 @@ function scoreScenarioLean(
       caution += 6;
       break;
     case "volatility_vwap_monitor":
-      neutral += 18;
-      caution += vwapState === "below" ? 22 : 14;
-      if (ctx.volatility.bucket === "elevated") caution += 10;
+      if (vwapState === "below" || ctx.close.bucket === "weak") {
+        caution += 24;
+        neutral += 14;
+      } else {
+        neutral += 20;
+        caution += 10;
+      }
+      if (ctx.volatility.bucket === "elevated") caution += 8;
       break;
     case "false_breakout":
       caution += 28;
@@ -765,10 +812,10 @@ export function getTopStrategyTitle(theme: GuidanceTheme, vwapState: VwapUiState
   switch (theme) {
     case "volatility_vwap_monitor":
       return vwapState === "below"
-        ? "평균 거래 단가 회복과 종가 안정성을 먼저 확인해야 합니다."
-        : "VWAP 회복과 종가 위치 개선이 핵심입니다.";
+        ? "VWAP 회복과 종가 위치 개선이 핵심입니다."
+        : "VWAP 회복과 종가 안정성이 핵심입니다.";
     case "vwap_monitor":
-      return "평균 거래 단가 지지와 종가 위치 개선이 핵심입니다.";
+      return "VWAP 회복과 종가 위치 개선이 핵심입니다.";
     case "strong_trend":
       return "추세 유지와 과열 완화 여부가 핵심입니다.";
     case "week52_high_breakout":
@@ -784,25 +831,12 @@ export function getTopStrategyTitle(theme: GuidanceTheme, vwapState: VwapUiState
   }
 }
 
-function getGuidanceSubtitle(theme: GuidanceTheme): string {
-  switch (theme) {
-    case "strong_trend":
-      return "현재 흐름은 양호하지만, 추세 유지와 과열 여부를 함께 확인하는 것이 좋습니다.";
-    case "volatility_vwap_monitor":
-      return "평균 거래 단가 회복·변동폭 완화·종가 안정성이 다음 해석의 핵심입니다.";
-    case "vwap_monitor":
-      return "평균 거래 단가 지지와 종가 마감이 다음 해석의 핵심입니다.";
-    case "low_liquidity":
-      return "가격 변화보다 거래 참여가 먼저 확인되어야 합니다.";
-    case "false_breakout":
-      return "장중 강세보다 종가 유지와 윗꼬리 해소가 더 중요합니다.";
-    case "week52_low_rebound":
-      return "저점 자체보다 회복이 이어지는지가 더 중요합니다.";
-    case "week52_high_breakout":
-      return "고점권 위치보다 돌파 이후 종가·윗꼬리가 더 중요합니다.";
-    default:
-      return "점수보다 다음 조건 확인이 더 중요한 구간입니다.";
-  }
+function getGuidanceSubtitle(
+  theme: GuidanceTheme,
+  vwapState: VwapUiState,
+  closeState: CloseStrategyState,
+): string {
+  return buildGuidanceFocusLine(theme, vwapState, closeState);
 }
 
 export function buildThemeSpecificSummary(
@@ -824,20 +858,16 @@ export function buildOneLineSummary(
 ): string {
   switch (theme) {
     case "volatility_vwap_monitor":
-      if (vwapState === "below") {
-        return "현재는 평균 거래 단가 아래에서 회복 여부를 확인해야 하는 구간입니다. 장중 흔들림이 컸기 때문에 다음 거래일에는 VWAP 회복과 종가 안정성이 함께 나타나는지가 핵심입니다.";
+      if (vwapState === "below" || closeState.tier === "low_range") {
+        return "다음 거래일에는 장중 반등 자체보다 VWAP 위 회복이 종가까지 유지되는지와, 종가가 저가권을 벗어나는지가 핵심입니다.";
       }
-      return "현재는 방향을 단정하기보다 평균 거래 단가 회복과 변동폭 완화, 종가 안정성을 함께 확인해야 하는 구간입니다.";
+      return "다음 거래일에는 변동폭이 줄어들면서 평균 거래 단가 위 흐름이 종가까지 유지되는지가 핵심입니다.";
     case "vwap_monitor":
-      return vwapState === "near_above" || vwapState === "below"
-        ? "현재는 방향을 단정하기보다 평균 거래 단가 회복과 종가 안정성을 먼저 확인해야 하는 구간입니다."
-        : `현재는 평균 거래 단가 위 유지와 ${withObjectParticle(
-            closeState.tier === "low_range"
-              ? "종가 위치 개선"
-              : closeState.tier === "defense"
-                ? "종가 방어 유지"
-                : "종가 안정성",
-          )} 먼저 확인해야 하는 구간입니다.`;
+      return vwapState === "below"
+        ? "다음 거래일에는 VWAP 위 회복이 종가까지 이어지는지, 종가가 저가권을 벗어나는지가 핵심입니다."
+        : `다음 거래일에는 평균 거래 단가 위 유지와 ${withObjectParticle(
+            closeState.tier === "low_range" ? "종가 위치 개선" : "종가 안정성",
+          )}이 핵심입니다.`;
     case "strong_trend":
       return "현재는 흐름이 비교적 양호하므로, 무리한 경계보다 추세 유지와 과열 여부를 함께 확인하는 것이 적절합니다.";
     case "week52_high_breakout":
@@ -977,14 +1007,14 @@ function buildRecoveryScenario(
   const closeState = getCloseStrategyState(result.ohlc.closePositionScore);
   if (theme === "volatility_vwap_monitor") {
     mainText =
-      vwapState === "below"
-        ? "평균 거래 단가 위 회복이 종가까지 유지되고 변동폭이 줄어들면, 장중 흔들림보다 회복 신뢰도를 더 크게 볼 수 있습니다."
+      vwapState === "below" || closeState.tier === "low_range"
+        ? "다음 거래일에 평균 거래 단가 위로 회복한 뒤 그 흐름이 종가까지 유지되고, 마감 위치가 저가권을 벗어나면 회복 신뢰도가 높아질 수 있습니다."
         : "평균 거래 단가 위 흐름이 유지되고 변동폭이 완화되며 마감이 안정되면 회복 신뢰도가 높아질 수 있습니다.";
   } else if (theme === "vwap_monitor") {
     mainText =
       vwapState === "below"
-        ? `평균 거래 단가 위 회복이 종가까지 이어지고, ${closeState.checkPhrase}면 회복 신뢰도가 높아질 수 있습니다.`
-        : "평균 거래 단가 위에서 버티는 흐름이 종가까지 이어지고 마감이 개선되면 회복 신뢰도가 높아질 수 있습니다.";
+        ? `평균 거래 단가 위로 회복한 뒤 종가까지 유지되고, ${closeRecoveryConditionPhrase(closeState)} 회복 신뢰도가 높아질 수 있습니다.`
+        : `평균 거래 단가 위에서 버티는 흐름이 종가까지 이어지고, ${closeRecoveryConditionPhrase(closeState)} 회복 신뢰도가 높아질 수 있습니다.`;
   } else if (theme === "strong_trend") {
     mainText =
       "지지선·평균 거래 단가 위 흐름이 유지되고 거래 과열 없이 마감이 방어되면 추세 유지 신뢰도가 높아질 수 있습니다.";
@@ -1037,7 +1067,7 @@ function buildNeutralScenario(
     "평균 거래 단가 근처 등락과 보통 수준의 거래 참여가 이어지면, 아직 회복도 이탈도 확정하기 어려운 관찰 구간입니다.";
   if (theme === "volatility_vwap_monitor") {
     mainText =
-      "평균 거래 단가 부근 등락과 보통 수준의 거래 참여가 이어지면, 방향성 확정보다는 추가 확인 구간입니다.";
+      "평균 거래 단가 근처에서 등락이 이어지고 종가가 뚜렷하게 개선되지 않으면, 회복도 이탈도 확정하기 어려운 관찰 구간으로 보는 것이 적절합니다.";
   } else if (theme === "vwap_monitor" || vwapState === "near_above") {
     mainText =
       "평균 거래 단가 근처에서 등락이 이어지면 지지·이탈이 확정되지 않은 확인 구간이며, 종가 마감이 해석의 기준입니다.";
@@ -1095,7 +1125,7 @@ function buildCautionScenario(
     "평균 거래 단가 아래 체류가 길어지고 종가가 다시 약해지면, 장중 반등보다 지지 실패 가능성을 더 크게 봐야 합니다.";
   if (theme === "volatility_vwap_monitor") {
     mainText =
-      "평균 거래 단가 아래 체류가 길어지고 변동성이 다시 커지면, 현재 흐름은 더 보수적인 관찰 구간으로 이동할 수 있습니다.";
+      "평균 거래 단가 아래 체류가 길어지고 종가가 다시 저가권에 머무르면, 장중 반등보다 지지 실패 가능성을 더 크게 봐야 합니다.";
   } else if (theme === "vwap_monitor" && (vwapState === "below" || vwapState === "near_above")) {
     mainText =
       "평균 거래 단가 아래 체류가 길어지고 종가가 다시 약해지면, 장중 반등보다 지지 실패 가능성을 더 크게 봐야 합니다.";
@@ -1209,10 +1239,10 @@ function buildNextActionChecklist(
   if (theme === "volatility_vwap_monitor" && ctx.volatility.bucket === "elevated") {
     intradayDisplay =
       vwapState === "below"
-        ? "VWAP 아래 체류 시간이 길어지는지와 변동폭 완화 여부를 확인하세요."
-        : "장중 흔들림이 줄고 VWAP 이탈 후 회복이 빠른지 확인하세요.";
+        ? "장중에는 평균 거래 단가를 잠깐 이탈하는지보다, 이탈 후 회복 속도와 VWAP 아래 체류 시간, 변동폭 완화 여부를 보세요."
+        : "장중 흔들림이 줄고 VWAP 이탈 후 회복이 빠른지, 변동폭이 완화되는지 확인하세요.";
     intradayInterpretation =
-      "회복 시간이 길어질수록 단기 지지 신뢰도는 낮아질 수 있습니다.";
+      "회복 실패 시간이 길어질수록 단기 지지 신뢰도는 낮아질 수 있습니다.";
   } else if (ctx.volatility.bucket === "elevated" && theme !== "strong_trend") {
     intradayDisplay =
       "이탈 여부와 함께 장중 변동폭이 줄어드는지, 종가 쪽으로 안정되는지 보세요.";
@@ -1235,10 +1265,10 @@ function buildNextActionChecklist(
   } else if (closeState.tier === "improve") {
     closeDisplay = "종가가 당일 범위 중상단 쪽으로 개선되는지 확인하세요.";
   } else if (closeState.tier === "low_range") {
-    closeDisplay = "종가가 저가권을 벗어나는지 확인하세요.";
-  }
-  if (theme === "volatility_vwap_monitor" && closeState.tier !== "low_range") {
-    closeDisplay = "종가가 약해지기보다 안정적으로 유지되는지 확인하세요.";
+    closeDisplay =
+      "종가에는 당일 범위의 저가권을 벗어나 중상단 쪽으로 올라오는지 확인하세요.";
+    closeInterpretation =
+      "장중 반등이 있더라도 마감이 저가권에 머무르면 회복 신뢰도는 제한적으로 봐야 합니다.";
   }
   if (
     (theme === "false_breakout" || theme === "week52_high_breakout") &&
@@ -1252,11 +1282,13 @@ function buildNextActionChecklist(
   let volumeDisplay =
     ctx.volume.bucket === "weak"
       ? "가격 회복이 거래 참여 회복과 함께 나오는지 확인하세요."
-      : "가격 회복이 거래 참여 유지와 함께 나오는지 확인하세요.";
+      : ctx.volume.bucket === "mixed"
+        ? "거래량이 유지되는지만 보지 말고, 가격 회복이 함께 나오는지 확인하세요."
+        : "가격 회복이 거래 참여 유지와 함께 나오는지 확인하세요.";
   let volumeInterpretation =
     ctx.volume.bucket === "weak"
       ? "거래 참여 없이 오른 가격은 아직 확증 신호로 보기 어렵습니다."
-      : "거래량만 유지되고 가격이 회복되지 않으면 아직 확증 신호로 보기 어렵습니다.";
+      : "거래량만 있고 가격이 회복되지 않으면 아직 확증 신호로 보기 어렵습니다.";
   if (result.volume.volumeScore >= 55 && result.ohlc.closePositionScore <= 50) {
     volumeDisplay = "거래는 붙었지만 종가가 약하지 않은지(분배 가능성) 확인하세요.";
     volumeInterpretation =
@@ -1283,7 +1315,7 @@ function buildNextActionChecklist(
   if ((result.riskGateOverlay?.overlayScore || 0) >= 15) {
     cautionParts.push("원점수 해석 제한");
   }
-  if (cautionParts.length > 0) {
+  if (cautionParts.length > 0 && theme !== "volatility_vwap_monitor" && theme !== "vwap_monitor") {
     cautionDisplay = `${cautionParts.join("·")} 신호가 겹치는지 확인하세요.`;
     cautionInterpretation =
       "복합 약세가 겹치면 단일 지표보다 보수적 해석이 타당해질 수 있습니다.";
@@ -1455,7 +1487,7 @@ export function buildNextTradingDayGuidance(
   const strategicContext = buildStrategicContext(result, theme, vwapState);
   const { dominantScenario, primaryScenarioLabel, dominantScenarioReason, dominantVerdict } =
     resolveDominantScenario(result, theme, vwapState, strategicContext, closeState);
-  const subtitle = getGuidanceSubtitle(theme);
+  const subtitle = getGuidanceSubtitle(theme, vwapState, closeState);
   const oneLineSummary = buildOneLineSummary(
     result,
     theme,
@@ -1548,12 +1580,10 @@ export function NextTradingDayGuidanceSection({
           현재 우세 시나리오
         </p>
         <p className="mt-2 text-sm leading-6 text-white/85">{guidance.dominantScenarioReason}</p>
-        <p className="mt-2 text-[11px] leading-5 text-white/45">
-          {guidance.strategicContext.compositeHint}
-        </p>
       </div>
 
-      <p className="mt-4 text-sm font-medium leading-6 text-white/88">{guidance.oneLineSummary}</p>
+      <p className="mt-4 text-[11px] font-semibold text-emerald-100/75">다음 거래일 한 줄 전략</p>
+      <p className="mt-1 text-sm font-medium leading-6 text-white/88">{guidance.oneLineSummary}</p>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <div className="rounded-xl border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-2.5">

@@ -1165,7 +1165,7 @@ function AiSummarySection({ aiSummary }: { aiSummary: StockAiSummary | null }) {
 
           {aiSummary.sixWForecast.howMuch ? (
             <div className="rounded-2xl border border-cyan-300/20 bg-black/20 px-3.5 py-3.5">
-              <p className="text-[11px] font-semibold text-cyan-100/80">얼마나: 가능성 변화 분석</p>
+              <p className="text-[11px] font-semibold text-cyan-100/80">얼마나: 조건별 해석 비중</p>
               <div className="mt-2 grid gap-3 sm:grid-cols-[1.1fr_0.9fr]">
                 <div>
                   <p className="text-[11px] font-semibold text-white/75">현재 우세 판단</p>
@@ -1232,6 +1232,12 @@ function AiSummarySection({ aiSummary }: { aiSummary: StockAiSummary | null }) {
                     ))}
                   </ul>
                 </div>
+              ) : null}
+
+              {aiSummary.sixWForecast.probabilityNote ? (
+                <p className="mt-3 border-t border-white/10 pt-2.5 text-[11px] leading-5 text-white/55">
+                  {aiSummary.sixWForecast.probabilityNote}
+                </p>
               ) : null}
             </div>
           ) : null}
