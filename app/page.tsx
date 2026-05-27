@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { buildDynamicConfirmationFallbacks } from "@/src/engine/confirmationFallback";
 import { dedupeConfirmationCards } from "@/src/ui/dedupeConfirmationCards";
+import type { ChartSeriesBundle } from "@/src/chart/buildChartSeries";
 import { NextTradingDayGuidanceSection } from "@/src/ui/nextTradingDayGuidance";
+import { StockChart } from "@/src/ui/StockChart";
 
 type IconName =
   | "activity"
@@ -299,11 +301,50 @@ type StockAiSixWForecast = {
   probabilityNote?: string;
 };
 
+type ProviderPriority = "PRIMARY" | "SECONDARY" | "FALLBACK";
+type ProviderStatus = "AVAILABLE" | "UNAVAILABLE" | "FALLBACK_USED" | "ERROR";
+type DataMode =
+  | "REALTIME"
+  | "DELAYED"
+  | "EOD"
+  | "EOD_FALLBACK"
+  | "FALLBACK"
+  | "SAMPLE";
+type ReliabilityLevel = "HIGH" | "MEDIUM" | "LOW" | "LIMITED";
+
+type MarketDataQualityView = {
+  reliabilityLevel: ReliabilityLevel;
+  priceScaleSuspicious: boolean;
+  missingPreviousClose: boolean;
+  insufficientCandles: boolean;
+  invalidOhlc: boolean;
+  sourceMismatch: boolean;
+  validationMessages: string[];
+  limitationMessage?: string;
+};
+
+type MarketDataView = {
+  code: string;
+  name: string;
+  market: string;
+  provider: string;
+  providerPriority: ProviderPriority;
+  providerStatus: ProviderStatus;
+  symbol: string;
+  dataMode: DataMode;
+  isRealtime: boolean;
+  baseDate: string;
+  baseTime?: string;
+  dataQuality: MarketDataQualityView;
+};
+
 type StockAnalysisApiResponse = {
   success: boolean;
   mode?: StockDataFreshness["mode"];
   source?: StockDataFreshness["provider"];
   freshness?: StockDataFreshness;
+  marketData?: MarketDataView;
+  chartSeries?: ChartSeriesBundle;
   diagnostics?: unknown;
   warning?: string;
   data?: StockAnalysisViewResult;
@@ -315,11 +356,16 @@ type StockAnalysisApiResponse = {
 type AnalysisMeta = {
   freshness?: StockDataFreshness;
   warning: string;
+  marketData?: MarketDataView;
+  chartSeries?: ChartSeriesBundle;
 };
 
 type StockDataFreshness = {
-  provider: "yahoo-finance" | "kis-developers" | "sample";
+  provider: "yahoo-finance" | "kis" | "kis-developers" | "sample";
+  providerPriority?: ProviderPriority;
+  providerStatus?: ProviderStatus;
   mode: "EOD" | "INTRADAY" | "SAMPLE" | "FALLBACK";
+  dataMode?: DataMode;
   isRealtime: boolean;
   isSameDayData: boolean;
   isConfirmedEOD: boolean;
@@ -328,6 +374,9 @@ type StockDataFreshness = {
   timezone: string;
   sourceLabel: string;
   cautionMessage: string;
+  reliabilityLevel?: ReliabilityLevel;
+  resolvedStockCode?: string;
+  resolvedStockName?: string;
 };
 
 const gradeLabels: Record<string, string> = {
@@ -494,6 +543,8 @@ export default function Home() {
       setAnalysisMeta({
         freshness: data.freshness,
         warning: data.warning || "",
+        marketData: data.marketData,
+        chartSeries: data.chartSeries,
       });
     } catch (error) {
       setAnalysisError(error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.");
@@ -1342,6 +1393,125 @@ function AiSummarySection({ aiSummary }: { aiSummary: StockAiSummary | null }) {
   );
 }
 
+function MarketDataStatusPanel({
+  displayedStockName,
+  confirmedStockName,
+  confirmedTicker,
+  sourceLabel,
+  freshness,
+  marketData,
+  warning,
+  dataFreshnessNotice,
+  modeNotice,
+}: {
+  displayedStockName: string;
+  confirmedStockName: string;
+  confirmedTicker: string;
+  sourceLabel: string;
+  freshness?: StockDataFreshness;
+  marketData?: MarketDataView;
+  warning: string;
+  dataFreshnessNotice: string;
+  modeNotice: string;
+}) {
+  const resolvedCode = marketData?.code || freshness?.resolvedStockCode || confirmedTicker;
+  const resolvedName = marketData?.name || freshness?.resolvedStockName || confirmedStockName;
+  const providerPriority = marketData?.providerPriority ?? freshness?.providerPriority;
+  const providerStatus = marketData?.providerStatus ?? freshness?.providerStatus;
+  const dataMode = marketData?.dataMode ?? freshness?.dataMode;
+  const reliability =
+    marketData?.dataQuality.reliabilityLevel ?? freshness?.reliabilityLevel ?? "MEDIUM";
+  const priceScaleSuspicious = marketData?.dataQuality.priceScaleSuspicious ?? false;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <p className="text-sm font-semibold text-white/82">분석 대상: {displayedStockName}</p>
+      <div className="mt-3 grid gap-1.5 sm:grid-cols-2">
+        <StatusRow label="확인 종목" value={`${resolvedName}${resolvedCode ? ` (${resolvedCode})` : ""}`} />
+        <StatusRow label="종목 코드" value={resolvedCode || "-"} />
+        <StatusRow label="데이터 출처" value={sourceLabel} />
+        <StatusRow label="Provider 우선순위" value={getProviderPriorityLabel(providerPriority)} />
+        <StatusRow label="Provider 상태" value={getProviderStatusLabel(providerStatus)} />
+        <StatusRow label="데이터 모드" value={getExtendedDataModeLabel(dataMode, freshness?.mode)} />
+        <StatusRow
+          label="실시간 여부"
+          value={freshness?.isRealtime ? "실시간 또는 준실시간" : "실시간 데이터 아님"}
+        />
+        <StatusRow label="기준일" value={marketData?.baseDate || freshness?.baseDate || "-"} />
+        <StatusRow
+          label="가격 스케일 상태"
+          value={priceScaleSuspicious ? "확인 필요 (의심)" : "특이 신호 없음"}
+        />
+        <StatusRow label="분석 신뢰도" value={getReliabilityLevelLabel(reliability)} />
+      </div>
+      <p className="mt-2 text-xs leading-6 text-white/45">{modeNotice}</p>
+      {warning ? (
+        <p className="mt-2 rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-3 text-xs leading-6 text-amber-50/80">
+          {warning}
+        </p>
+      ) : null}
+      {dataFreshnessNotice ? (
+        <p className="mt-2 rounded-2xl border border-amber-300/15 bg-amber-300/[0.055] p-3 text-xs leading-6 text-amber-50/72">
+          {dataFreshnessNotice}
+        </p>
+      ) : null}
+      {priceScaleSuspicious ? (
+        <p className="mt-2 rounded-2xl border border-rose-300/20 bg-rose-400/[0.06] p-3 text-xs leading-6 text-rose-100/80">
+          가격 데이터 스케일 확인이 필요합니다. 국내 주식 분석에는 KIS/KRX/Naver 기준 데이터 교차 검증이
+          필요합니다.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function StatusRow({ label, value }: { label: string; value: string }) {
+  return (
+    <p className="text-xs leading-6 text-white/55">
+      <span className="font-semibold text-white/70">{label}</span>
+      <span className="text-white/55">: {value}</span>
+    </p>
+  );
+}
+
+function getProviderPriorityLabel(priority: ProviderPriority | undefined): string {
+  if (priority === "PRIMARY") return "PRIMARY (정식 1차)";
+  if (priority === "SECONDARY") return "SECONDARY (2차)";
+  if (priority === "FALLBACK") return "FALLBACK (대체)";
+  return "-";
+}
+
+function getProviderStatusLabel(status: ProviderStatus | undefined): string {
+  if (status === "AVAILABLE") return "AVAILABLE";
+  if (status === "UNAVAILABLE") return "UNAVAILABLE";
+  if (status === "FALLBACK_USED") return "FALLBACK_USED";
+  if (status === "ERROR") return "ERROR";
+  return "-";
+}
+
+function getExtendedDataModeLabel(
+  dataMode: DataMode | undefined,
+  legacyMode: StockDataFreshness["mode"] | undefined,
+): string {
+  if (dataMode === "EOD_FALLBACK") return "EOD_FALLBACK (Yahoo 일봉 대체)";
+  if (dataMode === "FALLBACK") return "FALLBACK";
+  if (dataMode === "REALTIME") return "REALTIME";
+  if (dataMode === "DELAYED") return "DELAYED";
+  if (dataMode === "EOD") return "EOD";
+  if (dataMode === "SAMPLE") return "SAMPLE";
+  return getDataModeLabel(legacyMode);
+}
+
+function getReliabilityLevelLabel(level: ReliabilityLevel): string {
+  const labels: Record<ReliabilityLevel, string> = {
+    HIGH: "HIGH (높음)",
+    MEDIUM: "MEDIUM (보통)",
+    LOW: "LOW (낮음)",
+    LIMITED: "LIMITED (제한)",
+  };
+  return labels[level];
+}
+
 function AnalysisResultCard({
   result,
   targetStockName,
@@ -1363,8 +1533,6 @@ function AnalysisResultCard({
   const sourceLabel = meta.freshness?.sourceLabel || "샘플 데이터";
   const dataFreshnessNotice = getDataFreshnessNotice(meta.freshness, result);
   const modeNotice = getDataModeNotice(meta.freshness, meta.warning, Boolean(dataFreshnessNotice));
-  const dataBasisLabel = getDataBasisLabel(result);
-  const dataBasisValue = formatDataBasis(result);
   const topConfirmationCards = getTopConfirmationCards(result.warnings, result, 3);
   const scoreItems = [
     { key: "finalScore", title: "종합 점수", score: result.finalScore, type: "normal" as const },
@@ -1373,36 +1541,46 @@ function AnalysisResultCard({
     { key: "riskScore", title: "리스크 점수", score: result.risk.riskScore, type: "risk" as const },
   ];
 
+  const marketData = meta.marketData;
+  const chartSeries = meta.chartSeries;
+  const fallbackChartMessage =
+    meta.warning ||
+    marketData?.dataQuality.limitationMessage ||
+    meta.freshness?.cautionMessage;
+
   return (
     <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_90px_-64px_rgba(34,211,238,0.9)] backdrop-blur-2xl">
-      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-        <p className="text-sm font-semibold text-white/82">분석 대상: {displayedStockName}</p>
-        <p className="mt-2 text-xs leading-6 text-white/55">
-          확인 종목: {confirmedStockName}
-          {confirmedTicker ? ` (${confirmedTicker})` : ""}
-        </p>
-        <p className="text-xs leading-6 text-white/55">데이터 출처: {sourceLabel}</p>
-        <p className="text-xs leading-6 text-white/55">데이터 모드: {getDataModeLabel(meta.freshness?.mode)}</p>
-        <p className="text-xs leading-6 text-white/55">
-          당일 데이터 여부: {meta.freshness?.isSameDayData ? "당일 데이터 반영" : "당일 데이터가 아닐 수 있음"}
-        </p>
-        <p className="text-xs leading-6 text-white/55">
-          실시간 여부: {meta.freshness?.isRealtime ? "실시간 또는 준실시간" : "실시간 데이터 아님"}
-        </p>
-        <p className="text-xs leading-6 text-white/55">{dataBasisLabel}: {dataBasisValue}</p>
-        {meta.freshness?.mode === "INTRADAY" ? (
-          <p className="text-xs leading-6 text-white/55">
-            기준 시각: {formatDateTime(meta.freshness.baseDateTime)}
+      <MarketDataStatusPanel
+        displayedStockName={displayedStockName}
+        confirmedStockName={confirmedStockName}
+        confirmedTicker={confirmedTicker}
+        sourceLabel={sourceLabel}
+        freshness={meta.freshness}
+        marketData={marketData}
+        warning={meta.warning}
+        dataFreshnessNotice={dataFreshnessNotice}
+        modeNotice={modeNotice}
+      />
+
+      {chartSeries ? (
+        <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+          <p className="text-sm font-semibold text-cyan-200/85">가격·거래량 차트</p>
+          <p className="mt-1 text-[11px] leading-5 text-white/50">
+            정규화된 캔들 데이터 기준 (VWAP·전일 종가 참고선 포함)
           </p>
-        ) : null}
-        <p className="text-xs leading-6 text-white/55">기준 유형: {getDataBasisType(result, meta.freshness)}</p>
-        <p className="mt-2 text-xs leading-6 text-white/45">{modeNotice}</p>
-        {dataFreshnessNotice ? (
-          <p className="mt-1 rounded-2xl border border-amber-300/15 bg-amber-300/[0.055] p-3 text-xs leading-6 text-amber-50/72">
-            {dataFreshnessNotice}
-          </p>
-        ) : null}
-      </div>
+          <div className="mt-3">
+            <StockChart
+              series={chartSeries}
+              providerPriority={marketData?.providerPriority ?? meta.freshness?.providerPriority}
+              reliabilityLevel={
+                marketData?.dataQuality.reliabilityLevel ?? meta.freshness?.reliabilityLevel
+              }
+              priceScaleSuspicious={marketData?.dataQuality.priceScaleSuspicious}
+              fallbackMessage={fallbackChartMessage}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <AiSummarySection aiSummary={aiSummary} />
 

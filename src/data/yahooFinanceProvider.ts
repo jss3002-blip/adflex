@@ -73,6 +73,7 @@ export async function fetchYahooFinanceStockInput(params: {
   stock: StockSymbolInfo;
   range?: string;
   interval?: string;
+  fallbackContext?: { isKorean: boolean; code: string };
 }): Promise<StockAnalysisInput> {
   const range = params.range || "3mo";
   const interval = params.interval || "1d";
@@ -231,6 +232,15 @@ function buildProviderDiagnostics(params: {
 
   if (params.stock.market === "KOSPI" || params.stock.market === "KOSDAQ") {
     notes.push("Yahoo Finance 원본 가격 스케일 확인이 필요합니다.");
+    // TODO: Replace with KIS/KRX/Naver cross-source validation when primary providers connect.
+    if (params.stock.code === "005930") {
+      const price = finiteOr(params.result.meta?.regularMarketPrice, latest.close);
+      if (price < 30_000 || price > 150_000) {
+        notes.push(
+          `삼성전자 가격 스케일 의심: ${price.toLocaleString("ko-KR")}원 (개발용 기대 범위 30,000~150,000원).`,
+        );
+      }
+    }
   }
 
   if (notes.length === 0) {
@@ -269,7 +279,10 @@ export function buildYahooFreshness(input: StockAnalysisInput): StockDataFreshne
 
   return {
     provider: "yahoo-finance",
+    providerPriority: "FALLBACK",
+    providerStatus: "AVAILABLE",
     mode: "EOD",
+    dataMode: "EOD",
     isRealtime: false,
     isSameDayData: isSameSeoulDate(baseDateTime),
     isConfirmedEOD: true,
@@ -279,6 +292,7 @@ export function buildYahooFreshness(input: StockAnalysisInput): StockDataFreshne
     sourceLabel: "Yahoo Finance",
     cautionMessage:
       "Yahoo Finance 기준 차트 데이터이며, 거래소 및 데이터 제공 환경에 따라 지연되거나 조정된 값이 포함될 수 있습니다.",
+    reliabilityLevel: "MEDIUM",
   };
 }
 

@@ -61,10 +61,7 @@ export async function POST(req: Request) {
     }
 
     try {
-      const providerResult = await getStockDataForAnalysis({
-        stockName,
-        provider: "yahoo-finance",
-      });
+      const providerResult = await getStockDataForAnalysis({ stockName });
       const result = analyzeStock(providerResult.input);
       const aiSummary = await resolveAiSummary(result, stockName);
 
@@ -74,6 +71,8 @@ export async function POST(req: Request) {
           mode: providerResult.freshness.mode,
           source: providerResult.freshness.provider,
           freshness: providerResult.freshness,
+          marketData: providerResult.marketData,
+          chartSeries: providerResult.chartSeries,
           diagnostics: providerResult.diagnostics,
           warning: providerResult.warning,
           data: result,
